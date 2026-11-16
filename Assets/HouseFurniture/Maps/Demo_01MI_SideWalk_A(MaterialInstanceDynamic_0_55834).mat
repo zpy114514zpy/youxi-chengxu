@@ -1,0 +1,55 @@
+%YAML 1.1
+%TAG !u! tag:Export3d.com,2011:
+--- !u!21 &2100000
+Material:
+  serializedVersion: 6
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: MI_SideWalk_A(MaterialInstanceDynamic_0_55834)
+  m_Shader: {fileID: 4800000, guid: dac1a000000000414176446485896038, type: 3}
+  m_ShaderKeywords: 
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 1
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - Material_Texture2D_0:
+        m_Texture: {fileID: 2800000, guid: dac1a000000007821145410460888155, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - Material_Texture2D_1:
+        m_Texture: {fileID: 2800000, guid: dac1a000000000304810900067378110, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    - Material_Texture2D_2:
+        m_Texture: {fileID: 2800000, guid: dac1a000000011805236400767142231, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    m_Ints: []
+    m_Floats:
+    - UV_Scale: 1.000000
+    - Tile_U: 1.000000
+    - Tile_V: 6.893750
+    - Mat1_Brightness: 1.752681
+    - Mat1_Desaturation: 0.000000
+    - Mat2_Brightness: 1.440256
+    - Mat2_Desaturation: 0.000000
+    - Global_Sharp: 8.000000
+    - VColor_Scale: 0.200000
+    - Detail_Sharp: 0.800000
+    - Sharpness: 1.000000
+    - Metallic: 0.000000
+    - _DstBlend: 0
+    - _SrcBlend: 1
+    - _UVSec: 0
+    - _ZWrite: 1
+    m_Colors:
+    - _Color: {r: 0.8, g: 0.8, b: 0.8, a: 1}
+    - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
+    - SelectionColor: {r: 0.000000, g: 0.000000, b: 0.000000, a: 0.000000}
