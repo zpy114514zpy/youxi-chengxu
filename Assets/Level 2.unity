@@ -268,6 +268,63 @@ MonoBehaviour:
   blendDistance: 0
   weight: 1
   sharedProfile: {fileID: 11400000, guid: bfd5c164cf55a8c4abd1628b08d9dc08, type: 2}
+--- !u!1001 &954614077
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 1031339561, guid: dac1a000000015103321227624935995, type: 3}
+      propertyPath: m_Name
+      value: SM_Box_A16 (2)
+      objectReference: {fileID: 0}
+    - target: {fileID: 1031339562, guid: dac1a000000015103321227624935995, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1031339562, guid: dac1a000000015103321227624935995, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1031339562, guid: dac1a000000015103321227624935995, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1031339562, guid: dac1a000000015103321227624935995, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -17.53
+      objectReference: {fileID: 0}
+    - target: {fileID: 1031339562, guid: dac1a000000015103321227624935995, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 3.2032
+      objectReference: {fileID: 0}
+    - target: {fileID: 1031339562, guid: dac1a000000015103321227624935995, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -94.12996
+      objectReference: {fileID: 0}
+    - target: {fileID: 1031339562, guid: dac1a000000015103321227624935995, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 0.707107
+      objectReference: {fileID: 0}
+    - target: {fileID: 1031339562, guid: dac1a000000015103321227624935995, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1031339562, guid: dac1a000000015103321227624935995, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0.707107
+      objectReference: {fileID: 0}
+    - target: {fileID: 1031339562, guid: dac1a000000015103321227624935995, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: dac1a000000015103321227624935995, type: 3}
 --- !u!1 &1031336745
 GameObject:
   m_ObjectHideFlags: 0
@@ -25201,15 +25258,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1031340727, guid: dac1a000000016455819340365423927, type: 3}
       propertyPath: m_LocalScale.x
-      value: 1.000000
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 1031340727, guid: dac1a000000016455819340365423927, type: 3}
       propertyPath: m_LocalScale.y
-      value: 1.000000
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 1031340727, guid: dac1a000000016455819340365423927, type: 3}
       propertyPath: m_LocalScale.z
-      value: 1.000000
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 1031340727, guid: dac1a000000016455819340365423927, type: 3}
       propertyPath: m_LocalPosition.x
@@ -25221,542 +25278,29 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1031340727, guid: dac1a000000016455819340365423927, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -94.078819
+      value: -94.07882
       objectReference: {fileID: 0}
     - target: {fileID: 1031340727, guid: dac1a000000016455819340365423927, type: 3}
       propertyPath: m_LocalRotation.w
-      value: 0.000000
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 1031340727, guid: dac1a000000016455819340365423927, type: 3}
       propertyPath: m_LocalRotation.x
-      value: 0.000000
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 1031340727, guid: dac1a000000016455819340365423927, type: 3}
       propertyPath: m_LocalRotation.y
-      value: 1.000000
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 1031340727, guid: dac1a000000016455819340365423927, type: 3}
       propertyPath: m_LocalRotation.z
-      value: 0.000000
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: dac1a000000016455819340365423927, type: 3}
---- !u!1001 &1031340762
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 0}
-    m_Modifications:
-    - target: {fileID: 1031340755, guid: dac1a000000013033200491288980741, type: 3}
-      propertyPath: m_Name
-      value: SM_Cloth_B1
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340756, guid: dac1a000000013033200491288980741, type: 3}
-      propertyPath: m_LocalScale.x
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340756, guid: dac1a000000013033200491288980741, type: 3}
-      propertyPath: m_LocalScale.y
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340756, guid: dac1a000000013033200491288980741, type: 3}
-      propertyPath: m_LocalScale.z
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340756, guid: dac1a000000013033200491288980741, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: -18.312811
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340756, guid: dac1a000000013033200491288980741, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 4.572400
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340756, guid: dac1a000000013033200491288980741, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: -94.263771
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340756, guid: dac1a000000013033200491288980741, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 0.024466
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340756, guid: dac1a000000013033200491288980741, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: -0.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340756, guid: dac1a000000013033200491288980741, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: 0.999701
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340756, guid: dac1a000000013033200491288980741, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: -0.000000
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: dac1a000000013033200491288980741, type: 3}
---- !u!1001 &1031340771
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 0}
-    m_Modifications:
-    - target: {fileID: 1031340764, guid: dac1a000000016431264107738223614, type: 3}
-      propertyPath: m_Name
-      value: SM_Cloth_B2
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340765, guid: dac1a000000016431264107738223614, type: 3}
-      propertyPath: m_LocalScale.x
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340765, guid: dac1a000000016431264107738223614, type: 3}
-      propertyPath: m_LocalScale.y
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340765, guid: dac1a000000016431264107738223614, type: 3}
-      propertyPath: m_LocalScale.z
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340765, guid: dac1a000000016431264107738223614, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: -18.474688
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340765, guid: dac1a000000016431264107738223614, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 4.572400
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340765, guid: dac1a000000016431264107738223614, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: -94.263771
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340765, guid: dac1a000000016431264107738223614, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 0.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340765, guid: dac1a000000016431264107738223614, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: 0.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340765, guid: dac1a000000016431264107738223614, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340765, guid: dac1a000000016431264107738223614, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: 0.000000
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: dac1a000000016431264107738223614, type: 3}
---- !u!1001 &1031340780
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 0}
-    m_Modifications:
-    - target: {fileID: 1031340773, guid: dac1a000000007719207089537382839, type: 3}
-      propertyPath: m_Name
-      value: SM_Cloth_B3
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340774, guid: dac1a000000007719207089537382839, type: 3}
-      propertyPath: m_LocalScale.x
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340774, guid: dac1a000000007719207089537382839, type: 3}
-      propertyPath: m_LocalScale.y
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340774, guid: dac1a000000007719207089537382839, type: 3}
-      propertyPath: m_LocalScale.z
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340774, guid: dac1a000000007719207089537382839, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: -18.662521
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340774, guid: dac1a000000007719207089537382839, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 4.572400
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340774, guid: dac1a000000007719207089537382839, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: -94.263771
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340774, guid: dac1a000000007719207089537382839, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 0.995389
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340774, guid: dac1a000000007719207089537382839, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: 0.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340774, guid: dac1a000000007719207089537382839, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: 0.095924
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340774, guid: dac1a000000007719207089537382839, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: -0.000000
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: dac1a000000007719207089537382839, type: 3}
---- !u!1001 &1031340789
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 0}
-    m_Modifications:
-    - target: {fileID: 1031340782, guid: dac1a000000013035714858808030873, type: 3}
-      propertyPath: m_Name
-      value: SM_Cloth_B4
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340783, guid: dac1a000000013035714858808030873, type: 3}
-      propertyPath: m_LocalScale.x
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340783, guid: dac1a000000013035714858808030873, type: 3}
-      propertyPath: m_LocalScale.y
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340783, guid: dac1a000000013035714858808030873, type: 3}
-      propertyPath: m_LocalScale.z
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340783, guid: dac1a000000013035714858808030873, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: -17.850943
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340783, guid: dac1a000000013035714858808030873, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 4.572400
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340783, guid: dac1a000000013035714858808030873, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: -94.263771
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340783, guid: dac1a000000013035714858808030873, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 0.999395
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340783, guid: dac1a000000013035714858808030873, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: -0.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340783, guid: dac1a000000013035714858808030873, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: 0.034783
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340783, guid: dac1a000000013035714858808030873, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: -0.000000
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: dac1a000000013035714858808030873, type: 3}
---- !u!1001 &1031340798
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 0}
-    m_Modifications:
-    - target: {fileID: 1031340791, guid: dac1a000000009657298891914288782, type: 3}
-      propertyPath: m_Name
-      value: SM_Cloth_B5
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340792, guid: dac1a000000009657298891914288782, type: 3}
-      propertyPath: m_LocalScale.x
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340792, guid: dac1a000000009657298891914288782, type: 3}
-      propertyPath: m_LocalScale.y
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340792, guid: dac1a000000009657298891914288782, type: 3}
-      propertyPath: m_LocalScale.z
-      value: 0.890253
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340792, guid: dac1a000000009657298891914288782, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: -17.683765
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340792, guid: dac1a000000009657298891914288782, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 4.572400
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340792, guid: dac1a000000009657298891914288782, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: -94.263771
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340792, guid: dac1a000000009657298891914288782, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: -0.034311
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340792, guid: dac1a000000009657298891914288782, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: 0.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340792, guid: dac1a000000009657298891914288782, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: 0.999411
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340792, guid: dac1a000000009657298891914288782, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: 0.000000
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: dac1a000000009657298891914288782, type: 3}
---- !u!1001 &1031340807
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 0}
-    m_Modifications:
-    - target: {fileID: 1031340800, guid: dac1a000000001112151436798288879, type: 3}
-      propertyPath: m_Name
-      value: SM_Cloth_B6
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340801, guid: dac1a000000001112151436798288879, type: 3}
-      propertyPath: m_LocalScale.x
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340801, guid: dac1a000000001112151436798288879, type: 3}
-      propertyPath: m_LocalScale.y
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340801, guid: dac1a000000001112151436798288879, type: 3}
-      propertyPath: m_LocalScale.z
-      value: 1.010503
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340801, guid: dac1a000000001112151436798288879, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: -17.468529
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340801, guid: dac1a000000001112151436798288879, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 4.572400
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340801, guid: dac1a000000001112151436798288879, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: -94.263771
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340801, guid: dac1a000000001112151436798288879, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: -0.012187
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340801, guid: dac1a000000001112151436798288879, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: 0.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340801, guid: dac1a000000001112151436798288879, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: 0.999926
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340801, guid: dac1a000000001112151436798288879, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: 0.000000
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: dac1a000000001112151436798288879, type: 3}
---- !u!1001 &1031340809
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 0}
-    m_Modifications:
-    - target: {fileID: 1031340755, guid: dac1a000000013033200491288980741, type: 3}
-      propertyPath: m_Name
-      value: SM_Cloth_B7
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340756, guid: dac1a000000013033200491288980741, type: 3}
-      propertyPath: m_LocalScale.x
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340756, guid: dac1a000000013033200491288980741, type: 3}
-      propertyPath: m_LocalScale.y
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340756, guid: dac1a000000013033200491288980741, type: 3}
-      propertyPath: m_LocalScale.z
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340756, guid: dac1a000000013033200491288980741, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: -16.933134
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340756, guid: dac1a000000013033200491288980741, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 4.572400
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340756, guid: dac1a000000013033200491288980741, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: -94.263771
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340756, guid: dac1a000000013033200491288980741, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 0.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340756, guid: dac1a000000013033200491288980741, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: 0.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340756, guid: dac1a000000013033200491288980741, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340756, guid: dac1a000000013033200491288980741, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: 0.000000
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: dac1a000000013033200491288980741, type: 3}
---- !u!1001 &1031340816
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 0}
-    m_Modifications:
-    - target: {fileID: 1031340764, guid: dac1a000000016431264107738223614, type: 3}
-      propertyPath: m_Name
-      value: SM_Cloth_B8
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340765, guid: dac1a000000016431264107738223614, type: 3}
-      propertyPath: m_LocalScale.x
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340765, guid: dac1a000000016431264107738223614, type: 3}
-      propertyPath: m_LocalScale.y
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340765, guid: dac1a000000016431264107738223614, type: 3}
-      propertyPath: m_LocalScale.z
-      value: 0.858336
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340765, guid: dac1a000000016431264107738223614, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: -16.587362
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340765, guid: dac1a000000016431264107738223614, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 4.572400
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340765, guid: dac1a000000016431264107738223614, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: -94.263771
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340765, guid: dac1a000000016431264107738223614, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 0.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340765, guid: dac1a000000016431264107738223614, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: 0.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340765, guid: dac1a000000016431264107738223614, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340765, guid: dac1a000000016431264107738223614, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: 0.000000
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: dac1a000000016431264107738223614, type: 3}
---- !u!1001 &1031340830
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 0}
-    m_Modifications:
-    - target: {fileID: 1031340823, guid: dac1a000000000913298176671946645, type: 3}
-      propertyPath: m_Name
-      value: SM_Cloth_B10
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340824, guid: dac1a000000000913298176671946645, type: 3}
-      propertyPath: m_LocalScale.x
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340824, guid: dac1a000000000913298176671946645, type: 3}
-      propertyPath: m_LocalScale.y
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340824, guid: dac1a000000000913298176671946645, type: 3}
-      propertyPath: m_LocalScale.z
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340824, guid: dac1a000000000913298176671946645, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: -17.336926
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340824, guid: dac1a000000000913298176671946645, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 4.572400
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340824, guid: dac1a000000000913298176671946645, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: -94.263771
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340824, guid: dac1a000000000913298176671946645, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 0.997846
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340824, guid: dac1a000000000913298176671946645, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: 0.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340824, guid: dac1a000000000913298176671946645, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: -0.065607
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340824, guid: dac1a000000000913298176671946645, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: 0.000000
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: dac1a000000000913298176671946645, type: 3}
 --- !u!1001 &1031340832
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -26498,120 +26042,6 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: dac1a000000013509513350018071768, type: 3}
---- !u!1001 &1031340936
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 0}
-    m_Modifications:
-    - target: {fileID: 1031340929, guid: dac1a000000012299390863258175948, type: 3}
-      propertyPath: m_Name
-      value: SM_Cloth_B11
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340930, guid: dac1a000000012299390863258175948, type: 3}
-      propertyPath: m_LocalScale.x
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340930, guid: dac1a000000012299390863258175948, type: 3}
-      propertyPath: m_LocalScale.y
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340930, guid: dac1a000000012299390863258175948, type: 3}
-      propertyPath: m_LocalScale.z
-      value: 0.959238
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340930, guid: dac1a000000012299390863258175948, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: -16.798210
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340930, guid: dac1a000000012299390863258175948, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 4.572400
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340930, guid: dac1a000000012299390863258175948, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: -94.263771
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340930, guid: dac1a000000012299390863258175948, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 0.997846
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340930, guid: dac1a000000012299390863258175948, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: 0.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340930, guid: dac1a000000012299390863258175948, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: -0.065607
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340930, guid: dac1a000000012299390863258175948, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: 0.000000
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: dac1a000000012299390863258175948, type: 3}
---- !u!1001 &1031340945
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 0}
-    m_Modifications:
-    - target: {fileID: 1031340938, guid: dac1a000000006865430039884570315, type: 3}
-      propertyPath: m_Name
-      value: SM_Cloth_B9
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340939, guid: dac1a000000006865430039884570315, type: 3}
-      propertyPath: m_LocalScale.x
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340939, guid: dac1a000000006865430039884570315, type: 3}
-      propertyPath: m_LocalScale.y
-      value: 1.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340939, guid: dac1a000000006865430039884570315, type: 3}
-      propertyPath: m_LocalScale.z
-      value: 0.890253
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340939, guid: dac1a000000006865430039884570315, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: -18.152906
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340939, guid: dac1a000000006865430039884570315, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 4.572400
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340939, guid: dac1a000000006865430039884570315, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: -94.263771
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340939, guid: dac1a000000006865430039884570315, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 0.999169
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340939, guid: dac1a000000006865430039884570315, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: -0.000000
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340939, guid: dac1a000000006865430039884570315, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: -0.040768
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031340939, guid: dac1a000000006865430039884570315, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: 0.000000
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: dac1a000000006865430039884570315, type: 3}
 --- !u!1001 &1031340954
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -48643,12 +48073,12 @@ PrefabInstance:
     m_TransformParent: {fileID: 0}
     m_Modifications:
     - target: {fileID: 1031344003, guid: dac1a000000004248906117214164463, type: 3}
-      propertyPath: m_IsActive
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 1031344003, guid: dac1a000000004248906117214164463, type: 3}
       propertyPath: m_Name
       value: Sky Sphere
+      objectReference: {fileID: 0}
+    - target: {fileID: 1031344003, guid: dac1a000000004248906117214164463, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 1031344004, guid: dac1a000000004248906117214164463, type: 3}
       propertyPath: m_LocalScale.x
@@ -1304427,6 +1303857,63 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: dac1a000000005096088870975858954, type: 3}
+--- !u!1001 &1674630948
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 1031339561, guid: dac1a000000015103321227624935995, type: 3}
+      propertyPath: m_Name
+      value: SM_Box_A16 (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 1031339562, guid: dac1a000000015103321227624935995, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1031339562, guid: dac1a000000015103321227624935995, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1031339562, guid: dac1a000000015103321227624935995, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1031339562, guid: dac1a000000015103321227624935995, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -17.822
+      objectReference: {fileID: 0}
+    - target: {fileID: 1031339562, guid: dac1a000000015103321227624935995, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 3.2032
+      objectReference: {fileID: 0}
+    - target: {fileID: 1031339562, guid: dac1a000000015103321227624935995, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -94.12996
+      objectReference: {fileID: 0}
+    - target: {fileID: 1031339562, guid: dac1a000000015103321227624935995, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 0.707107
+      objectReference: {fileID: 0}
+    - target: {fileID: 1031339562, guid: dac1a000000015103321227624935995, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: -0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1031339562, guid: dac1a000000015103321227624935995, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0.707107
+      objectReference: {fileID: 0}
+    - target: {fileID: 1031339562, guid: dac1a000000015103321227624935995, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: dac1a000000015103321227624935995, type: 3}
 --- !u!850595691 &2094261606
 LightingSettings:
   m_ObjectHideFlags: 0
@@ -1306079,7 +1305566,6 @@ SceneRoots:
   - {fileID: 1031394959}
   - {fileID: 1031401532}
   - {fileID: 1031364586}
-  - {fileID: 1031340771}
   - {fileID: 1031467695}
   - {fileID: 1031584097}
   - {fileID: 1031354359}
@@ -1309647,7 +1309133,6 @@ SceneRoots:
   - {fileID: 1031695017}
   - {fileID: 1031651169}
   - {fileID: 1031374204}
-  - {fileID: 1031340816}
   - {fileID: 1031575377}
   - {fileID: 1031686209}
   - {fileID: 1031497919}
@@ -1312427,7 +1311912,6 @@ SceneRoots:
   - {fileID: 1031688785}
   - {fileID: 1031569873}
   - {fileID: 1031647297}
-  - {fileID: 1031340936}
   - {fileID: 1031597505}
   - {fileID: 1031623025}
   - {fileID: 1031337369}
@@ -1314516,7 +1314000,6 @@ SceneRoots:
   - {fileID: 1031692135}
   - {fileID: 1031599745}
   - {fileID: 1031568721}
-  - {fileID: 1031340809}
   - {fileID: 1031380196}
   - {fileID: 1031338127}
   - {fileID: 1031451631}
@@ -1316779,7 +1316262,6 @@ SceneRoots:
   - {fileID: 1031390318}
   - {fileID: 1031655137}
   - {fileID: 1031364054}
-  - {fileID: 1031340798}
   - {fileID: 1031466623}
   - {fileID: 1031672385}
   - {fileID: 1031369745}
@@ -1317038,7 +1316520,6 @@ SceneRoots:
   - {fileID: 1031360491}
   - {fileID: 1031395834}
   - {fileID: 1031513247}
-  - {fileID: 1031340830}
   - {fileID: 1031352441}
   - {fileID: 1031626577}
   - {fileID: 1031491055}
@@ -1318101,7 +1317582,6 @@ SceneRoots:
   - {fileID: 1031411234}
   - {fileID: 1031469279}
   - {fileID: 1031631921}
-  - {fileID: 1031340789}
   - {fileID: 1031384333}
   - {fileID: 1031419151}
   - {fileID: 1031588849}
@@ -1319700,7 +1319180,6 @@ SceneRoots:
   - {fileID: 1031406992}
   - {fileID: 1031664129}
   - {fileID: 1031510991}
-  - {fileID: 1031340780}
   - {fileID: 1031461727}
   - {fileID: 1031580129}
   - {fileID: 1031348948}
@@ -1320524,7 +1320003,6 @@ SceneRoots:
   - {fileID: 1031382037}
   - {fileID: 1031379832}
   - {fileID: 1031388064}
-  - {fileID: 1031340945}
   - {fileID: 1031618241}
   - {fileID: 1031650657}
   - {fileID: 1031380182}
@@ -1322898,7 +1322376,6 @@ SceneRoots:
   - {fileID: 1031511567}
   - {fileID: 1031354226}
   - {fileID: 1031599665}
-  - {fileID: 1031340807}
   - {fileID: 1031682625}
   - {fileID: 1031658561}
   - {fileID: 1031594529}
@@ -1323395,7 +1322872,6 @@ SceneRoots:
   - {fileID: 1031588913}
   - {fileID: 1031469951}
   - {fileID: 1031675889}
-  - {fileID: 1031340762}
   - {fileID: 1031449551}
   - {fileID: 1031679521}
   - {fileID: 1031607185}
@@ -1327228,3 +1326704,5 @@ SceneRoots:
   - {fileID: 1031344330}
   - {fileID: 1031344332}
   - {fileID: 419351045}
+  - {fileID: 1674630948}
+  - {fileID: 954614077}
