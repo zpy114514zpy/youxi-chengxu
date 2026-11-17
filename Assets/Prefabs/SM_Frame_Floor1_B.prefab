@@ -75,7 +75,7 @@ BoxCollider:
   m_GameObject: {fileID: 1031337014}
   m_Material: {fileID: 0}
   m_IsTrigger: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 2
   m_Size : {x: 0.611865, y : -0.204890, z : 4.431813}
   m_Center : {x: 0.000000, y : 0.000000, z : 0.000000}
@@ -120,7 +120,7 @@ BoxCollider:
   m_GameObject: {fileID: 1031337017}
   m_Material: {fileID: 0}
   m_IsTrigger: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 2
   m_Size : {x: 1.373576, y : -0.204890, z : 4.431813}
   m_Center : {x: 0.000000, y : 0.000000, z : 0.000000}
@@ -135,6 +135,7 @@ GameObject:
   - component: {fileID: 1031337021}
   - component: {fileID: 1031337022}
   - component: {fileID: 1031337023}
+  - component: {fileID: 1031337024}
   m_Layer: 0
   m_Name: SM_Frame_Floor1_B
   m_TagString: Untagged
@@ -209,4 +210,18 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1031337020}
+  m_Mesh: {fileID: 4300000, guid: dac1a000000004346781820619206369, type: 3}
+--- !u!64 &1031337024
+MeshCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1031337020}
+  m_Material: {fileID: 0}
+  m_IsTrigger: 0
+  m_Enabled: 1
+  serializedVersion: 4
+  m_Convex: 0
+  m_CookingOptions: 30
   m_Mesh: {fileID: 4300000, guid: dac1a000000004346781820619206369, type: 3}

@@ -75,7 +75,7 @@ BoxCollider:
   m_GameObject: {fileID: 1031338248}
   m_Material: {fileID: 0}
   m_IsTrigger: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 2
   m_Size : {x: 0.203348, y : -0.196036, z : 2.555317}
   m_Center : {x: 0.000000, y : 0.000000, z : 0.000000}
@@ -120,7 +120,7 @@ BoxCollider:
   m_GameObject: {fileID: 1031338251}
   m_Material: {fileID: 0}
   m_IsTrigger: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 2
   m_Size : {x: 0.203348, y : -0.196036, z : 2.555317}
   m_Center : {x: 0.000000, y : 0.000000, z : 0.000000}
@@ -135,6 +135,7 @@ GameObject:
   - component: {fileID: 1031338255}
   - component: {fileID: 1031338256}
   - component: {fileID: 1031338257}
+  - component: {fileID: 1031338258}
   m_Layer: 0
   m_Name: SM_Frame_Inside_200
   m_TagString: Untagged
@@ -210,4 +211,18 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1031338254}
+  m_Mesh: {fileID: 4300000, guid: dac1a000000016255715664063419896, type: 3}
+--- !u!64 &1031338258
+MeshCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1031338254}
+  m_Material: {fileID: 0}
+  m_IsTrigger: 0
+  m_Enabled: 1
+  serializedVersion: 4
+  m_Convex: 0
+  m_CookingOptions: 30
   m_Mesh: {fileID: 4300000, guid: dac1a000000016255715664063419896, type: 3}

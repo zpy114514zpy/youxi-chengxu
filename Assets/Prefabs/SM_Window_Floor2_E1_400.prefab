@@ -72,11 +72,11 @@ MeshCollider:
   m_GameObject: {fileID: 1031342965}
   m_Material: {fileID: 0}
   m_IsTrigger: 0
-    m_Enabled: 1
-    serializedVersion: 3
-    m_Convex: 0
-    m_CookingOptions: 14
-    m_Mesh : {fileID: 4300006, guid : dac1a000000016596168976050535493, type : 3}
+  m_Enabled: 0
+  serializedVersion: 3
+  m_Convex: 0
+  m_CookingOptions: 14
+  m_Mesh: {fileID: 4300006, guid : dac1a000000016596168976050535493, type : 3}
 --- !u!1 &1031342969
 GameObject:
   m_ObjectHideFlags: 0
@@ -88,6 +88,7 @@ GameObject:
   - component: {fileID: 1031342970}
   - component: {fileID: 1031342971}
   - component: {fileID: 1031342972}
+  - component: {fileID: 1031342981}
   m_Layer: 0
   m_Name: SM_Window_Floor2_E1_400_LOD0
   m_TagString: Untagged
@@ -335,3 +336,17 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1031342977}
   m_Mesh: {fileID: 4300004, guid: dac1a000000016596168976050535493, type: 3}
+--- !u!64 &1031342981
+MeshCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1031342969}
+  m_Material: {fileID: 0}
+  m_IsTrigger: 0
+  m_Enabled: 1
+  serializedVersion: 4
+  m_Convex: 0
+  m_CookingOptions: 30
+  m_Mesh: {fileID: 4300000, guid: dac1a000000016596168976050535493, type: 3}

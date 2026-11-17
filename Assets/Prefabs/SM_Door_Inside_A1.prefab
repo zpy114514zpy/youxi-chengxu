@@ -74,7 +74,7 @@ BoxCollider:
   m_GameObject: {fileID: 1031343417}
   m_Material: {fileID: 0}
   m_IsTrigger: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 2
   m_Size : {x: 0.005625, y : -0.761517, z : 2.109026}
   m_Center : {x: 0.000000, y : 0.000000, z : 0.000000}
@@ -89,6 +89,7 @@ GameObject:
   - component: {fileID: 1031343421}
   - component: {fileID: 1031343422}
   - component: {fileID: 1031343423}
+  - component: {fileID: 1031343424}
   m_Layer: 0
   m_Name: SM_Door_Inside_A1
   m_TagString: Untagged
@@ -160,4 +161,18 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1031343420}
+  m_Mesh: {fileID: 4300000, guid: dac1a000000013045632187926095193, type: 3}
+--- !u!64 &1031343424
+MeshCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1031343420}
+  m_Material: {fileID: 0}
+  m_IsTrigger: 0
+  m_Enabled: 1
+  serializedVersion: 4
+  m_Convex: 0
+  m_CookingOptions: 30
   m_Mesh: {fileID: 4300000, guid: dac1a000000013045632187926095193, type: 3}

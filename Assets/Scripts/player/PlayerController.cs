@@ -1,124 +1,150 @@
-﻿using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
+[RequireComponent(typeof(Rigidbody))]
 public class PlayerController : MonoBehaviour
 {
-    [Header("Movement")]
-    public float moveSpeed = 7f; //最大水平移动速度
-    public float groundDrag = 7f; //地面阻力
+    [Header("移动")]
+    [Min(0f)] public float walkSpeed = 2f;
+    [Min(0f)] public float moveSpeed = 7f;
+    [Min(0f)] public float groundDrag = 7f;
+    public float jumpForce = 12f;
+    public float jumpCooldown = 0.25f;
+    public float airMultiplier = 0.4f;
+    [Min(0f)] public float gravityMultiplier = 2f;
+    public KeyCode jumpKey = KeyCode.Space;
+    public float playerHeight = 2f;
+    public LayerMask Ground;
+    public Transform orientation;
 
-    public float jumpForce = 12f; //跳跃力度
-    public float jumpCooldown = 0.25f; //跳跃冷却时间，防止连续触发
-    public float airMultiplier = 0.4f; //空中移动倍率(角色在空中的控制力度是地面的多少倍)
-    [Min(0f)] public float gravityMultiplier = 2f; //重力倍率
-    bool readyToJump = true; //是否允许跳跃
+    [Header("角色动作")]
+    public KeyCode runKey = KeyCode.LeftShift;
+    public KeyCode pickupKey = KeyCode.F;
+    public KeyCode pushKey = KeyCode.E;
+    [Min(0f)] public float pushSpeed = 1f;
+    [Min(0f)] public float pushReach = 0.25f;
 
-    [Header("Keybinds")]
-    public KeyCode jumpKey = KeyCode.Space; //按空格跳跃
+    static readonly int Idle = State("Idle"), Walk = State("Walk"), Run = State("Run"),
+        Pickup = State("Pickup"), Push = State("Push"), Jump = State("Jump");
+    Rigidbody body;
+    Animator animator;
+    CapsuleCollider capsule;
+    ShoeGrounding shoes;
+    bool onFloor;
+    Vector3 direction;
+    bool running, pushHeld, jumping, jumpRequested;
+    float nextJumpTime, pickupUntil, pickupDuration;
+    int playing;
 
-    [Header("Ground Check")]
-    public float playerHeight = 2f; //角色高度，用于地面检测
-    public LayerMask Ground; //地面检测层级
-    bool grounded; 
-
-    public Transform orientation; //角色方向参考
-
-    float horizontalInput; //水平方向输入
-    float verticalInput; //垂直方向输入
-
-    Vector3 moveDirection; //三维移动方向
-
-    Rigidbody rb; //角色刚体组件
-    Animator animator; //角色动画组件
+    [Header("游戏视角")]
+    public bool followPlayer = true;
+    Camera viewCamera;
+    Vector3 cameraOffset;
 
     void Start()
     {
-        rb = GetComponent<Rigidbody>();
+        shoes = new ShoeGrounding(animator, capsule, FloorMask);
+        viewCamera = Camera.main;
+        if (!viewCamera || !followPlayer) return;
+        cameraOffset = Quaternion.Euler(0f, animator.transform.eulerAngles.y, 0f) * new Vector3(1.1f, 0.38f, -1.65f);
+        viewCamera.nearClipPlane = 0.05f;
+        LateUpdate();
+    }
+
+    void LateUpdate()
+    {
+        if (onFloor && !jumping) shoes?.Plant();
+        if (!followPlayer || !viewCamera) return;
+        Vector3 target = capsule.bounds.center;
+        Vector3 directionToCamera = cameraOffset.normalized;
+        float distance = cameraOffset.magnitude;
+        // 从角色碰撞体外向后检查，避免相机落在房间墙外。
+        foreach (RaycastHit hit in Physics.SphereCastAll(target, 0.08f, directionToCamera,
+            distance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            if (hit.collider.attachedRigidbody != body)
+                distance = Mathf.Min(distance, Mathf.Max(0.15f, hit.distance - 0.03f));
+        viewCamera.transform.SetPositionAndRotation(target + directionToCamera * distance,
+            Quaternion.LookRotation(-directionToCamera, Vector3.up));
+    }
+
+    static int State(string name) => Animator.StringToHash("Base Layer." + name);
+
+    void Awake()
+    {
+        body = GetComponent<Rigidbody>();
         animator = GetComponentInChildren<Animator>();
-        rb.freezeRotation = true; //冻结刚体旋转，防止角色倾斜
+        capsule = GetComponentInChildren<CapsuleCollider>();
+        body.freezeRotation = true;
+        foreach (var clip in animator.runtimeAnimatorController.animationClips)
+            if (clip.name == "Pickup") pickupDuration = clip.length;
     }
 
-void Update()
+    void Update()
     {
-        grounded = Physics.Raycast(transform.position, Vector3.down, playerHeight * 0.5f + 0.2f, Ground); //从角色中心点向正下方发射射线
-
-        MyInput(); 
-        animator.SetBool("Run", horizontalInput != 0f || verticalInput != 0f); //设置动画参数，判断是否在移动
-        SpeedControl(); //限制最大速度
-
-        if (grounded) 
-            rb.drag = groundDrag; //设置地面阻力，防止角色滑行
-        else
-            rb.drag = 0; //空中阻力为0，保持空中惯性
-    }
-
-    void FixedUpdate() 
-    {
-        MovePlayer(); 
-        rb.AddForce(Physics.gravity * (gravityMultiplier - 1f), ForceMode.Acceleration); //应用自定义重力
-    }
-
-    private void MyInput()
-    {
-        horizontalInput = Input.GetAxisRaw("Horizontal"); //获取水平方向输入
-        verticalInput = Input.GetAxisRaw("Vertical"); //获取垂直方向输入
-
-        if (Input.GetKeyDown(jumpKey) && readyToJump && grounded) //同时满足 本帧刚按下跳跃键；跳跃冷却已经结束；角色处于地面。
+        Transform basis = orientation;
+        if (!basis && Camera.main) basis = Camera.main.transform;
+        Vector3 forward = basis ? Vector3.ProjectOnPlane(basis.forward, Vector3.up).normalized : Vector3.forward;
+        if (forward.sqrMagnitude < 0.01f) forward = Vector3.forward;
+        direction = Vector3.ClampMagnitude(forward * Input.GetAxisRaw("Vertical")
+            + Vector3.Cross(Vector3.up, forward) * Input.GetAxisRaw("Horizontal"), 1f);
+        running = Input.GetKey(runKey);
+        pushHeld = Input.GetKey(pushKey);
+        if (!jumping && !pushHeld && Time.time >= pickupUntil && Input.GetKeyDown(pickupKey))
         {
-            readyToJump = false; //跳跃触发后，暂时禁止再次跳跃
-            Jump();
-            Invoke(nameof(ResetJump), jumpCooldown); //重置跳跃冷却
+            pickupUntil = Time.time + pickupDuration;
+            Play(Pickup);
         }
+        if (Input.GetKeyDown(jumpKey)) jumpRequested = true;
     }
 
-    private void MovePlayer()
-    {
-        moveDirection = orientation.forward * verticalInput
-                      + orientation.right * horizontalInput; //计算移动方向，基于角色朝向和输入
+    int FloorMask => Ground.value == 0 ? Physics.DefaultRaycastLayers : Ground.value;
 
-        // 有输入：沿用原本的AddForce推力逻辑
-        if (moveDirection.magnitude > 0.01f)
+    void FixedUpdate()
+    {
+        float dt = Time.fixedDeltaTime;
+        Bounds bounds = capsule.bounds;
+        // Probe a footprint so a seam between two floor tiles does not interrupt walking.
+        float radius = Mathf.Min(bounds.extents.x, bounds.extents.z) * 0.8f;
+        bool grounded = Physics.SphereCast(bounds.center, radius, Vector3.down, out var support,
+            bounds.extents.y - radius + 0.08f, FloorMask, QueryTriggerInteraction.Ignore)
+            && support.rigidbody != body && support.normal.y > 0.55f;
+        onFloor = grounded;
+        if (jumping && grounded && body.velocity.y <= 0.05f) jumping = false;
+        bool taking = Time.time < pickupUntil;
+        if (jumpRequested && grounded && !taking && Time.time >= nextJumpTime)
         {
-            if (grounded)
-            {
-                rb.AddForce(
-                    moveDirection.normalized * moveSpeed * 10f,
-                    ForceMode.Force
-                ); //地面移动
-            }
-            else
-            {
-                rb.AddForce(
-                    moveDirection.normalized * moveSpeed * 10f * airMultiplier,
-                    ForceMode.Force
-                ); //空中移动，乘以空中移动倍率
-            }
+            jumping = true;
+            nextJumpTime = Time.time + jumpCooldown;
+            body.velocity = new Vector3(body.velocity.x, jumpForce, body.velocity.z);
         }
-    }
+        jumpRequested = false;
 
-
-    private void SpeedControl() //限制最大速度
-    {
-        Vector3 flatVel = new Vector3(rb.velocity.x, 0f, rb.velocity.z); //获取水平速度分量
-
-        if (flatVel.magnitude > moveSpeed) //如果水平速度超过最大移动速度
+        bool moving = !taking && direction.sqrMagnitude > 0.001f;
+        RaycastHit obstacle = default;
+        bool pushing = moving && pushHeld && grounded && !jumping &&
+            body.SweepTest(direction.normalized, out obstacle, pushReach, QueryTriggerInteraction.Ignore)
+            && Mathf.Abs(obstacle.normal.y) < 0.65f;
+        float speed = pushing ? pushSpeed : running ? moveSpeed : walkSpeed;
+        Vector3 desired = moving ? direction * speed : Vector3.zero;
+        Vector3 horizontal = Vector3.ProjectOnPlane(body.velocity, Vector3.up);
+        float acceleration = Mathf.Max(1f, moveSpeed * groundDrag) * (grounded ? 1f : airMultiplier);
+        horizontal = Vector3.MoveTowards(horizontal, desired, acceleration * dt);
+        body.velocity = horizontal + Vector3.up * body.velocity.y;
+        body.AddForce(Physics.gravity * (gravityMultiplier - 1f), ForceMode.Acceleration);
+        if (pushing && obstacle.rigidbody && !obstacle.rigidbody.isKinematic)
         {
-            Vector3 limitedVel = flatVel.normalized * moveSpeed; //限制水平速度为最大移动速度
-            rb.velocity = new Vector3(limitedVel.x, rb.velocity.y, limitedVel.z); 
+            float along = Vector3.Dot(obstacle.rigidbody.velocity, direction.normalized);
+            obstacle.rigidbody.AddForce(direction.normalized * Mathf.Clamp(pushSpeed - along, 0f, acceleration * dt), ForceMode.VelocityChange);
         }
+        if (moving)
+            animator.transform.rotation = Quaternion.RotateTowards(animator.transform.rotation,
+                Quaternion.LookRotation(direction), 720f * dt);
+        Play(taking ? Pickup : jumping ? Jump : pushing ? Push : moving ? (running ? Run : Walk) : Idle);
     }
 
-    private void Jump()
+    void Play(int state)
     {
-        animator.SetTrigger("Jump"); //触发跳跃动画
-        rb.velocity = new Vector3(rb.velocity.x, 0f, rb.velocity.z); //重置垂直速度，确保跳跃高度一致
-        rb.AddForce(transform.up * jumpForce, ForceMode.Impulse); //施加向上的冲力，触发跳跃
+        if (playing == state) return;
+        animator.CrossFadeInFixedTime(state, 0.1f, 0, 0f);
+        playing = state;
     }
-
-    private void ResetJump() //重置跳跃冷却
-    {
-        readyToJump = true;
-    }
-
 }

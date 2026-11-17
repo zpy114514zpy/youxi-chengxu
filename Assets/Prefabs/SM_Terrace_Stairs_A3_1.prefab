@@ -42,11 +42,11 @@ MeshCollider:
   m_GameObject: {fileID: 1031343167}
   m_Material: {fileID: 0}
   m_IsTrigger: 0
-    m_Enabled: 1
-    serializedVersion: 3
-    m_Convex: 0
-    m_CookingOptions: 14
-    m_Mesh : {fileID: 4300004, guid : dac1a000000014467556071543976926, type : 3}
+  m_Enabled: 0
+  serializedVersion: 3
+  m_Convex: 0
+  m_CookingOptions: 14
+  m_Mesh: {fileID: 4300004, guid : dac1a000000014467556071543976926, type : 3}
 --- !u!1 &1031343170
 GameObject:
   m_ObjectHideFlags: 0
@@ -58,6 +58,7 @@ GameObject:
   - component: {fileID: 1031343171}
   - component: {fileID: 1031343172}
   - component: {fileID: 1031343173}
+  - component: {fileID: 1031343174}
   m_Layer: 0
   m_Name: SM_Terrace_Stairs_A3
   m_TagString: Untagged
@@ -130,4 +131,18 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1031343170}
+  m_Mesh: {fileID: 4300000, guid: dac1a000000014467556071543976926, type: 3}
+--- !u!64 &1031343174
+MeshCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1031343170}
+  m_Material: {fileID: 0}
+  m_IsTrigger: 0
+  m_Enabled: 1
+  serializedVersion: 4
+  m_Convex: 0
+  m_CookingOptions: 30
   m_Mesh: {fileID: 4300000, guid: dac1a000000014467556071543976926, type: 3}
