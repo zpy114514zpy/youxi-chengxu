@@ -7,11 +7,11 @@ public class PlayerController : MonoBehaviour
     [Min(0f)] public float walkSpeed = 2f;
     [Min(0f)] public float moveSpeed = 7f;
     [Min(0f)] public float groundDrag = 7f;
-    public float jumpForce = 12f;
-    public float jumpCooldown = 0.25f;
+    [HideInInspector] public float jumpForce = 12f;
+    [HideInInspector] public float jumpCooldown = 0.25f;
     public float airMultiplier = 0.4f;
     [Min(0f)] public float gravityMultiplier = 2f;
-    public KeyCode jumpKey = KeyCode.Space;
+    [HideInInspector] public KeyCode jumpKey = KeyCode.Space;
     public float playerHeight = 2f;
     public LayerMask Ground;
     public Transform orientation;
@@ -23,49 +23,37 @@ public class PlayerController : MonoBehaviour
     [Min(0f)] public float pushSpeed = 1f;
     [Min(0f)] public float pushReach = 0.25f;
 
-    static readonly int Idle = State("Idle"), Walk = State("Walk"), Run = State("Run"),
-        Pickup = State("Pickup"), Push = State("Push"), Jump = State("Jump");
+    static readonly int Idle = State("Idle"), Walk = State("Walk"),
+        Pickup = State("Pickup"), Push = State("Push");
     Rigidbody body;
     Animator animator;
     CapsuleCollider capsule;
     ShoeGrounding shoes;
     bool onFloor;
     Vector3 direction;
-    bool running, pushHeld, jumping, jumpRequested;
-    float nextJumpTime, pickupUntil, pickupDuration;
+    bool pushHeld;
+    float pickupUntil, pickupDuration;
     int playing;
 
     [Header("游戏视角")]
-    public bool followPlayer = true;
-    Camera viewCamera;
-    Vector3 cameraOffset;
+    [HideInInspector] public bool followPlayer = true;
+    FirstPersonView firstPerson;
+    PlayerLampInteraction lampInteraction;
+
 
     void Start()
     {
         shoes = new ShoeGrounding(animator, capsule, FloorMask);
-        viewCamera = Camera.main;
-        if (!viewCamera || !followPlayer) return;
-        cameraOffset = Quaternion.Euler(0f, animator.transform.eulerAngles.y, 0f) * new Vector3(1.1f, 0.38f, -1.65f);
-        viewCamera.nearClipPlane = 0.05f;
-        LateUpdate();
+        firstPerson = gameObject.AddComponent<FirstPersonView>();
+        firstPerson.Initialize(animator, capsule);
+        lampInteraction = GetComponent<PlayerLampInteraction>();
+        if (!lampInteraction) lampInteraction = gameObject.AddComponent<PlayerLampInteraction>();
     }
 
     void LateUpdate()
     {
-        if (onFloor && !jumping) shoes?.Plant();
-        if (!followPlayer || !viewCamera) return;
-        Vector3 target = capsule.bounds.center;
-        Vector3 directionToCamera = cameraOffset.normalized;
-        float distance = cameraOffset.magnitude;
-        // 从角色碰撞体外向后检查，避免相机落在房间墙外。
-        foreach (RaycastHit hit in Physics.SphereCastAll(target, 0.08f, directionToCamera,
-            distance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
-            if (hit.collider.attachedRigidbody != body)
-                distance = Mathf.Min(distance, Mathf.Max(0.15f, hit.distance - 0.03f));
-        viewCamera.transform.SetPositionAndRotation(target + directionToCamera * distance,
-            Quaternion.LookRotation(-directionToCamera, Vector3.up));
+        if (onFloor) shoes?.Plant();
     }
-
     static int State(string name) => Animator.StringToHash("Base Layer." + name);
 
     void Awake()
@@ -74,6 +62,7 @@ public class PlayerController : MonoBehaviour
         animator = GetComponentInChildren<Animator>();
         capsule = GetComponentInChildren<CapsuleCollider>();
         body.freezeRotation = true;
+        body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
         foreach (var clip in animator.runtimeAnimatorController.animationClips)
             if (clip.name == "Pickup") pickupDuration = clip.length;
     }
@@ -86,14 +75,14 @@ public class PlayerController : MonoBehaviour
         if (forward.sqrMagnitude < 0.01f) forward = Vector3.forward;
         direction = Vector3.ClampMagnitude(forward * Input.GetAxisRaw("Vertical")
             + Vector3.Cross(Vector3.up, forward) * Input.GetAxisRaw("Horizontal"), 1f);
-        running = Input.GetKey(runKey);
-        pushHeld = Input.GetKey(pushKey);
-        if (!jumping && !pushHeld && Time.time >= pickupUntil && Input.GetKeyDown(pickupKey))
+        firstPerson?.CheckRunAttempt(Input.GetKey(runKey), direction.sqrMagnitude > 0.001f);
+        pushHeld = Input.GetKey(pushKey) && !(lampInteraction && lampInteraction.IsTargetingSwitch);
+        if (onFloor && !pushHeld && Time.time >= pickupUntil && Input.GetKeyDown(pickupKey))
         {
             pickupUntil = Time.time + pickupDuration;
             Play(Pickup);
         }
-        if (Input.GetKeyDown(jumpKey)) jumpRequested = true;
+
     }
 
     int FloorMask => Ground.value == 0 ? Physics.DefaultRaycastLayers : Ground.value;
@@ -108,22 +97,13 @@ public class PlayerController : MonoBehaviour
             bounds.extents.y - radius + 0.08f, FloorMask, QueryTriggerInteraction.Ignore)
             && support.rigidbody != body && support.normal.y > 0.55f;
         onFloor = grounded;
-        if (jumping && grounded && body.velocity.y <= 0.05f) jumping = false;
         bool taking = Time.time < pickupUntil;
-        if (jumpRequested && grounded && !taking && Time.time >= nextJumpTime)
-        {
-            jumping = true;
-            nextJumpTime = Time.time + jumpCooldown;
-            body.velocity = new Vector3(body.velocity.x, jumpForce, body.velocity.z);
-        }
-        jumpRequested = false;
-
         bool moving = !taking && direction.sqrMagnitude > 0.001f;
         RaycastHit obstacle = default;
-        bool pushing = moving && pushHeld && grounded && !jumping &&
+        bool pushing = moving && pushHeld && grounded &&
             body.SweepTest(direction.normalized, out obstacle, pushReach, QueryTriggerInteraction.Ignore)
             && Mathf.Abs(obstacle.normal.y) < 0.65f;
-        float speed = pushing ? pushSpeed : running ? moveSpeed : walkSpeed;
+        float speed = pushing ? Mathf.Min(pushSpeed, walkSpeed) : walkSpeed;
         Vector3 desired = moving ? direction * speed : Vector3.zero;
         Vector3 horizontal = Vector3.ProjectOnPlane(body.velocity, Vector3.up);
         float acceleration = Mathf.Max(1f, moveSpeed * groundDrag) * (grounded ? 1f : airMultiplier);
@@ -135,16 +115,18 @@ public class PlayerController : MonoBehaviour
             float along = Vector3.Dot(obstacle.rigidbody.velocity, direction.normalized);
             obstacle.rigidbody.AddForce(direction.normalized * Mathf.Clamp(pushSpeed - along, 0f, acceleration * dt), ForceMode.VelocityChange);
         }
-        if (moving)
-            animator.transform.rotation = Quaternion.RotateTowards(animator.transform.rotation,
-                Quaternion.LookRotation(direction), 720f * dt);
-        Play(taking ? Pickup : jumping ? Jump : pushing ? Push : moving ? (running ? Run : Walk) : Idle);
+        Play(taking ? Pickup : pushing ? Push : moving ? Walk : Idle);
+        animator.speed = playing == Idle ? 0f : 1f;
+        firstPerson?.SetInteraction(taking || pushing);
     }
-
     void Play(int state)
     {
         if (playing == state) return;
-        animator.CrossFadeInFixedTime(state, 0.1f, 0, 0f);
+        animator.speed = 1f;
+        if (state == Idle) animator.Play(state, 0, 0f);
+        else animator.CrossFadeInFixedTime(state, 0.1f, 0, 0f);
         playing = state;
     }
 }
+
+
