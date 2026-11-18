@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using System.Collections.Generic;
 
 [DefaultExecutionOrder(100)]
@@ -22,12 +22,14 @@ public class FirstPersonView : MonoBehaviour
     readonly Quaternion[] appliedUpper = new Quaternion[2], appliedLower = new Quaternion[2], appliedHands = new Quaternion[2];
     float yaw, pitch, eyeHeight, reminderUntil;
     bool runAttempt, interacting;
+    float crouchOffset, targetCrouchOffset;
+    public void SetCrouchOffset(float offset) { targetCrouchOffset = offset; }
     Font font;
     Mesh visibleMesh, originalMesh;
     SkinnedMeshRenderer skin;
     FullBodyShadow fullBodyShadow;
 
-    public void Initialize(Animator character, CapsuleCollider collider)
+    public void Initialize(Animator character, CapsuleCollider collider, float standingEyeHeight = 0.9f)
     {
         animator = character;
         capsule = collider;
@@ -49,7 +51,7 @@ public class FirstPersonView : MonoBehaviour
             appliedHands[i] = restingHands[i];
         }
         yaw = animator.transform.eulerAngles.y;
-        eyeHeight = head ? head.position.y - capsule.bounds.min.y + 0.045f : capsule.bounds.size.y * 0.9f;
+        eyeHeight = standingEyeHeight;
         font = Font.CreateDynamicFontFromOSFont(new[] { "Microsoft YaHei", "SimHei", "Arial" }, 28);
         HideHead();
         if (view)
@@ -112,6 +114,8 @@ public class FirstPersonView : MonoBehaviour
 
     void Update()
     {
+        var inventory=GetComponent<PlayerInventory>();
+        if(inventory && inventory.IsOpen)return;
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             Cursor.lockState = CursorLockMode.None;
@@ -134,7 +138,8 @@ public class FirstPersonView : MonoBehaviour
         if (head) head.parent.localScale = Vector3.one * 0.001f;
         animator.transform.rotation = Quaternion.Euler(0f, yaw, 0f);
         Vector3 eye = capsule.bounds.center;
-        eye.y = capsule.bounds.min.y + eyeHeight;
+        crouchOffset = Mathf.MoveTowards(crouchOffset, targetCrouchOffset, Time.deltaTime * 2f);
+        eye.y = capsule.bounds.min.y + eyeHeight - crouchOffset;
         // Keep the eye outside the shirt, including when looking down into the collar.
         // The eye must stay outside nearby doors/furniture even though its normal
         // offset is slightly in front of the character's collision capsule.
