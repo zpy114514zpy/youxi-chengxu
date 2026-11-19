@@ -54,6 +54,7 @@ public class PlayerController : MonoBehaviour
 
     void Start()
     {
+        if (!GetComponent<StoryProgress>()) gameObject.AddComponent<StoryProgress>();
         inventory=GetComponent<PlayerInventory>();
         if (!inventory) inventory=gameObject.AddComponent<PlayerInventory>();
         if (!GetComponent<CrouchPose>()) gameObject.AddComponent<CrouchPose>();
@@ -88,6 +89,7 @@ public class PlayerController : MonoBehaviour
 
     void Update()
     {
+        UpdateCrouch();
         if(inventory && inventory.IsOpen){direction=Vector3.zero;pushHeld=false;return;}
         Transform basis = orientation;
         if (!basis && Camera.main) basis = Camera.main.transform;
@@ -97,7 +99,6 @@ public class PlayerController : MonoBehaviour
             + Vector3.Cross(Vector3.up, forward) * Input.GetAxisRaw("Horizontal"), 1f);
         firstPerson?.CheckRunAttempt(Input.GetKey(runKey), direction.sqrMagnitude > 0.001f);
         pushHeld = Input.GetKey(pushKey);
-        UpdateCrouch();
         if (pickupKey != KeyCode.None && onFloor && !pushHeld && Time.time >= pickupUntil && Input.GetKeyDown(pickupKey))
         {
             pickupUntil = Time.time + pickupDuration;

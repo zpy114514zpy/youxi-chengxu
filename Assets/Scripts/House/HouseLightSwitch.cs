@@ -11,5 +11,6 @@ public sealed class HouseLightSwitch : MonoBehaviour
     {
         bool next = !IsOn;
         if (lamps != null) foreach (var lamp in lamps) if (lamp) lamp.SetOn(next);
+        if (next && StoryProgress.Instance) StoryProgress.Instance.OnLampTurnedOn();
     }
 }
