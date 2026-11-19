@@ -63,20 +63,20 @@ public sealed class StoryProgress : MonoBehaviour
     {
         if(IsReading)
         {
-            float w=Mathf.Min(Screen.width*.75f,820f),h=Mathf.Min(Screen.height*.32f,210f);
+            float w=Mathf.Min(Screen.width*.88f,1040f),h=Mathf.Min(Screen.height*.42f,270f);
             var r=new Rect((Screen.width-w)*.5f,(Screen.height-h)*.5f,w,h);
             if(detail)GUI.DrawTextureWithTexCoords(r,detail,new Rect(.125f,.26f,.75f,.43f));else GUI.Box(r,"");
-            GUI.Label(new Rect(r.x+35,r.y+22,w-70,35),detailTitle,Style(24,TextAnchor.MiddleCenter));
-            GUI.Label(new Rect(r.x+45,r.y+61,w-90,h-76),detailBody+"\n空格继续",Style(21,TextAnchor.MiddleCenter));
+            GUI.Label(new Rect(r.x+45,r.y+24,w-90,34),detailTitle,Style(20,TextAnchor.MiddleCenter));
+            GUI.Label(new Rect(r.x+55,r.y+65,w-110,h-84),detailBody+"\n空格继续",Style(17,TextAnchor.MiddleCenter));
             return;
         }
         if(string.IsNullOrEmpty(currentMessage))return;
         bool intro=currentMessage.StartsWith("你现在");
-        float width=Mathf.Min(Screen.width*.68f,intro?640f:780f),height=intro?140f:170f;
+        float width=Mathf.Min(Screen.width*.86f,intro?790f:980f),height=intro?175f:200f;
         var rect=new Rect((Screen.width-width)*.5f,Mathf.Min(Screen.height*.68f,Screen.height-height-16f),width,height);
         var texture=intro?toast:guide;
         if(texture)GUI.DrawTextureWithTexCoords(rect,texture,intro?new Rect(.10f,.215f,.78f,.565f):new Rect(.125f,.32f,.755f,.51f));else GUI.Box(rect,"");
-        GUI.Label(new Rect(rect.x+37,rect.y+17,width-74,height-34),currentMessage+"\n空格跳过",Style(intro?19:22,TextAnchor.MiddleCenter));
+        GUI.Label(new Rect(rect.x+50,rect.y+22,width-100,height-44),currentMessage+"\n空格跳过",Style(intro?17:18,TextAnchor.MiddleCenter));
     }
     GUIStyle Style(int size,TextAnchor align)=>new GUIStyle(GUI.skin.label){font=font,fontSize=size,alignment=align,wordWrap=true,normal={textColor=Color.white}};
     void OnDestroy(){if(Instance==this)Instance=null;if(font)Destroy(font);}

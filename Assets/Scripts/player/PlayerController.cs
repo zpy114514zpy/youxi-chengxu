@@ -150,10 +150,16 @@ public class PlayerController : MonoBehaviour
         float speed = pushing ? Mathf.Min(pushSpeed, walkSpeed) : walkSpeed;
         if(crouched)speed*=.5f;
         Vector3 desired = moving ? direction * speed : Vector3.zero;
+        // Follow the stair ramp instead of continually driving into its risers.
+        if (grounded && moving)
+            desired = Vector3.ProjectOnPlane(desired, support.normal).normalized * speed;
+        Vector3 desiredHorizontal = Vector3.ProjectOnPlane(desired, Vector3.up);
         Vector3 horizontal = Vector3.ProjectOnPlane(body.velocity, Vector3.up);
         float acceleration = Mathf.Max(1f, moveSpeed * groundDrag) * (grounded ? 1f : airMultiplier);
-        horizontal = Vector3.MoveTowards(horizontal, desired, acceleration * dt);
-        body.velocity = horizontal + Vector3.up * body.velocity.y;
+        horizontal = Vector3.MoveTowards(horizontal, desiredHorizontal, acceleration * dt);
+        float vertical = body.velocity.y;
+        if (grounded && desired.y > 0f) vertical = Mathf.Max(vertical, desired.y);
+        body.velocity = horizontal + Vector3.up * vertical;
         body.AddForce(Physics.gravity * (gravityMultiplier - 1f), ForceMode.Acceleration);
         if(pushing) obstacle.collider.GetComponentInParent<PushProp>().TryPush(direction,dt);
         Play(taking ? Pickup : pushing ? Push : moving ? Walk : Idle);

@@ -13,8 +13,13 @@ public sealed class StoryPlacement : MonoBehaviour
         var item=inventory.ConsumeSelected(requiredItemId);if(!item)return false;
         item.transform.SetPositionAndRotation(transform.position,transform.rotation);
         item.gameObject.SetActive(true);
+        var highlight=item.GetComponent<ProximityOutline>();if(highlight)highlight.enabled=false;
+        var visual=item.GetComponentInChildren<Renderer>();
+        if(visual)item.transform.position+=Vector3.up*(transform.position.y+.018f-visual.bounds.min.y);
         var rb=item.GetComponent<Rigidbody>();if(rb){rb.velocity=Vector3.zero;rb.isKinematic=true;}
         foreach(var c in item.GetComponentsInChildren<Collider>())c.enabled=false;
+        foreach(var r in GetComponentsInChildren<Renderer>())r.enabled=false;
+        foreach(var c in GetComponentsInChildren<Collider>())c.enabled=false;
         filled=true;puzzle.OnPlaced(order);return true;
     }
     void OnGUI()
@@ -22,6 +27,13 @@ public sealed class StoryPlacement : MonoBehaviour
         if(filled||!Camera.main)return;
         var player=FindObjectOfType<PlayerController>();
         if(!player||(player.transform.position-transform.position).sqrMagnitude>4f)return;
+        StoryPlacement focused=null;float best=float.MaxValue;
+        foreach(var hit in Physics.RaycastAll(Camera.main.transform.position,Camera.main.transform.forward,2f,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore))
+        {
+            var candidate=hit.collider.GetComponentInParent<StoryPlacement>();
+            if(candidate && hit.distance<best){focused=candidate;best=hit.distance;}
+        }
+        if(focused!=this)return;
         Vector3 point=Camera.main.WorldToScreenPoint(transform.position+Vector3.up*.18f);
         if(point.z<=0)return;
         GUI.Box(new Rect(point.x-90,Screen.height-point.y-38,180,30),"归位 "+(order+1)+" · "+DisplayName);
