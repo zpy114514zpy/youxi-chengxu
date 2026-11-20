@@ -5,6 +5,8 @@ public sealed class ReadableClue : MonoBehaviour
     [TextArea(3,8)] public string description="";
     public float glowRange=1.8f;
     public Vector3 labelOffset=Vector3.up*.25f;
+    [Tooltip("靠近时是否让物体自发光（墙上的日历这类大张贴物建议关掉）。")]
+    public bool emissive=true;
     [TextArea] public string guideAfterRead;
     bool guideShown;
     Renderer[] meshes;MaterialPropertyBlock block;Camera view;Transform player;
@@ -22,7 +24,7 @@ public sealed class ReadableClue : MonoBehaviour
     void LateUpdate()
     {
         if(!player||meshes==null)return;
-        if(title.Contains("绘本"))return;
+        if(title.Contains("绘本")||!emissive)return;
         bool near=(player.position-transform.position).sqrMagnitude<glowRange*glowRange;
         foreach(var r in meshes)if(r)
         {r.GetPropertyBlock(block);block.SetColor("_EmissionColor",near?Color.white*1.8f:Color.black);r.SetPropertyBlock(block);}

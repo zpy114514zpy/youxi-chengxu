@@ -9,6 +9,8 @@ public sealed class BedroomToyPuzzle:SequencePlacementPuzzle
     {
         var letterModel=GameObject.Find("1 (1)");
         var realFragment=letterModel?letterModel.transform.Find("对象007"):null;
+        if(!realFragment)realFragment=DrawerFragmentReveal.FindDeep("对象007");
+        if(!realFragment&&fragmentObject)realFragment=fragmentObject.transform;
         if(!realFragment)
         {
             Debug.LogError("第一关信封碎片“对象007”未找到。",this);
@@ -25,13 +27,29 @@ public sealed class BedroomToyPuzzle:SequencePlacementPuzzle
         if(!fragmentObject.GetComponent<EnvelopeFragment>())fragmentObject.AddComponent<EnvelopeFragment>();
         if(!fragmentObject.GetComponent<Collider>())
         {
-            var mesh=fragmentObject.GetComponent<MeshFilter>();
-            if(mesh && mesh.sharedMesh)
+            // 模型节点带缩放（书桌实例是 88.8 倍），碰撞体尺寸要按世界尺寸换算回局部空间。
+            var renderer=fragmentObject.GetComponent<Renderer>();
+            var bounds=renderer?renderer.bounds:new Bounds(fragmentObject.transform.position,Vector3.one*.1f);
+            var scale=fragmentObject.transform.lossyScale;
+            float sx=Mathf.Max(.0001f,Mathf.Abs(scale.x)),sy=Mathf.Max(.0001f,Mathf.Abs(scale.y)),sz=Mathf.Max(.0001f,Mathf.Abs(scale.z));
+            if(fragmentObject.GetComponent<MeshFilter>())
             {
-                var bounds=mesh.sharedMesh.bounds;
                 var box=fragmentObject.AddComponent<BoxCollider>();
-                box.center=bounds.center;
-                box.size=new Vector3(Mathf.Max(bounds.size.x,.025f),Mathf.Max(bounds.size.y,.025f),Mathf.Max(bounds.size.z,.025f));
+                box.center=fragmentObject.transform.InverseTransformPoint(bounds.center);
+                box.size=new Vector3(
+                    Mathf.Max(bounds.size.x/sx,.02f/sx),
+                    Mathf.Max(bounds.size.y/sy,.02f/sy),
+                    Mathf.Max(bounds.size.z/sz,.02f/sz));
+            }
+            else
+            {
+                // 碎片本身没有网格时，用子物体包围盒给一个够大的球体碰撞，保证能拾取。
+                var renderers=fragmentObject.GetComponentsInChildren<Renderer>(true);
+                Bounds combined=bounds;
+                for(int i=0;i<renderers.Length;i++)combined.Encapsulate(renderers[i].bounds);
+                var sphere=fragmentObject.AddComponent<SphereCollider>();
+                sphere.center=fragmentObject.transform.InverseTransformPoint(combined.center);
+                sphere.radius=Mathf.Max(.06f,combined.extents.magnitude/sx);
             }
         }
         fragmentObject.SetActive(false);
@@ -42,11 +60,17 @@ public sealed class BedroomToyPuzzle:SequencePlacementPuzzle
         if(!placed.Add(order) || solved || placed.Count<requiredSlots)return;
         solved=true;
         if(revealWhenSolved!=null)foreach(var reward in revealWhenSolved)if(reward)reward.SetActive(true);
-        StoryProgress.Instance?.RecordClue("四个玩偶都已回到床上，书桌上出现了一张信封碎片。");
+        StoryProgress.Instance?.RecordClue("四个玩偶都已回到床上，书桌抽屉里出现了一张信封碎片。");
         OnSolved();
     }
     protected override void OnSolved()
     {
-        if(fragmentObject)fragmentObject.SetActive(true);
+        StoryProgress.Instance?.OnBedroomPuzzleSolved();
+        if(!fragmentObject)return;
+        // 碎片先不出现：等玩家把剧情 UI 跳过之后，由 DrawerFragmentReveal 拉开抽屉再把碎片放进去。
+        fragmentObject.SetActive(false);
+        var reveal=GetComponent<DrawerFragmentReveal>();
+        if(!reveal)reveal=gameObject.AddComponent<DrawerFragmentReveal>();
+        reveal.Begin(fragmentObject);
     }
 }

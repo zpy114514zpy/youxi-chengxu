@@ -37,6 +37,17 @@ public class PlayerController : MonoBehaviour
     float pickupUntil, pickupDuration;
     int playing;
 
+    // ---- 站在可踩物（凳子）上的状态 ----
+    // 角色是带重力的动力学刚体，凳子又不在 Ground 层，光瞬移上去会被重力立刻拽回地面
+    // （表现为“按 E 后往下掉，站在凳子边而不是中心”）。所以站上去时由这里接管：
+    // 关重力 + 每帧钉在凳面中心，直到玩家主动迈下来。
+    bool platformLock;
+    Vector3 platformTarget;
+    float platformFeetOffset;
+    Vector3 platformCapOffset;   // 胶囊轴心相对角色根节点的水平偏移（胶囊常常不在根节点正下方）
+    float stepOffTimer;
+    public bool OnPlatform => platformLock;
+
     [Header("游戏视角")]
     [Tooltip("站立时镜头距脚底的高度（米），不随待机动画上下晃动。")]
     [Range(0.6f, 1.5f)] public float standingEyeHeight = 0.9f;
@@ -64,6 +75,8 @@ public class PlayerController : MonoBehaviour
         standingCenter = capsule.center;
         // Earlier scenes serialized E for pushing; Q is now reserved for that action.
         if (pushKey == KeyCode.E) pushKey = KeyCode.Q;
+        // 场景里序列化的 0.25 太贴脸，箱子稍微挪一点就够不到，给一个下限。
+        pushReach = Mathf.Max(pushReach, .45f);
         if (pickupKey == KeyCode.F || pickupKey == KeyCode.B) pickupKey = KeyCode.None;
         firstPerson = gameObject.AddComponent<FirstPersonView>();
         firstPerson.Initialize(animator, capsule, standingEyeHeight);
@@ -90,7 +103,7 @@ public class PlayerController : MonoBehaviour
 
     void Update()
     {
-        if(StoryProgress.Instance && StoryProgress.Instance.IsReading)
+        if(UiInputBlocker.Active || StoryProgress.Instance && StoryProgress.Instance.IsReading)
         {direction=Vector3.zero;pushHeld=false;return;}
         UpdateCrouch();
         if(inventory && inventory.IsOpen){direction=Vector3.zero;pushHeld=false;return;}
@@ -137,6 +150,7 @@ public class PlayerController : MonoBehaviour
     void FixedUpdate()
     {
         float dt = Time.fixedDeltaTime;
+        if (platformLock) { UpdatePlatform(dt); return; }
         Bounds bounds = capsule.bounds;
         // Probe a footprint so a seam between two floor tiles does not interrupt walking.
         float radius = Mathf.Min(bounds.extents.x, bounds.extents.z) * 0.8f;
@@ -146,11 +160,27 @@ public class PlayerController : MonoBehaviour
         onFloor = grounded;
         bool taking = Time.time < pickupUntil;
         bool moving = !taking && direction.sqrMagnitude > 0.001f;
-        RaycastHit obstacle = default;
-        bool pushing = moving && pushHeld && grounded &&
-            body.SweepTest(direction.normalized, out obstacle, pushReach, QueryTriggerInteraction.Ignore)
-            && Mathf.Abs(obstacle.normal.y) < 0.65f && obstacle.collider.GetComponentInParent<PushProp>();
-        float speed = pushing ? Mathf.Min(pushSpeed, walkSpeed) : walkSpeed;
+
+        // 推动：先问箱子这一帧能移动多远，角色再按同样速度跟上。
+        // 原来角色按 1.0 m/s 走、箱子只有 0.8 m/s，人会一直顶进箱子，画面一顿一顿地抖。
+        PushProp pushProp = null;
+        Vector3 pushNormal = Vector3.zero;
+        float pushGap = 0f;
+        float pushed = 0f;
+        bool pushing = moving && pushHeld && grounded && FindPushTarget(out pushProp, out pushNormal, out pushGap);
+        if (pushing)
+        {
+            // 正面顶着箱面推时，把方向锁到箱面法线：箱子只走直线，不会横着打滑。
+            Vector3 face = Vector3.ProjectOnPlane(-pushNormal, Vector3.up);
+            Vector3 pushDir = face.sqrMagnitude > .01f && Vector3.Dot(face.normalized, direction.normalized) > .5f
+                ? face.normalized : direction.normalized;
+            pushed = pushProp.TryPush(pushDir, dt);
+        }
+        // 和物体保持“贴着”的距离：中间还隔着一段就稍微快一点跟上去，贴住之后严格按物体的速度走。
+        // 只按物体速度走的话，玩家在 0.4 m 外按 Q 会一直保持 0.4 m，手永远够不到凳子。
+        float speed = pushing
+            ? Mathf.Min(walkSpeed, pushed / Mathf.Max(dt, .0001f) + Mathf.Max(0f, pushGap - .02f) * 6f)
+            : walkSpeed;
         if(crouched)speed*=.5f;
         Vector3 desired = moving ? direction * speed : Vector3.zero;
         // Follow the stair ramp instead of continually driving into its risers.
@@ -164,11 +194,130 @@ public class PlayerController : MonoBehaviour
         if (grounded && desired.y > 0f) vertical = Mathf.Max(vertical, desired.y);
         body.velocity = horizontal + Vector3.up * vertical;
         body.AddForce(Physics.gravity * (gravityMultiplier - 1f), ForceMode.Acceleration);
-        if(pushing) obstacle.collider.GetComponentInParent<PushProp>().TryPush(direction,dt);
         Play(taking ? Pickup : pushing ? Push : moving ? Walk : Idle);
         animator.speed = playing == Idle ? 0f : 1f;
         firstPerson?.SetInteraction(taking || pushing);
+        // 推的时候把目标交给视角层，由它把双手按在物体表面（物体移动、手跟着移动）。
+        firstPerson?.SetPush(pushing ? pushProp : null);
     }
+    // ---------- 可踩物（凳子） ----------
+
+    /// <summary>踩到可站立物体上：关掉重力，把角色钉在给定位置（世界坐标的“脚底点”）。</summary>
+    public void StandOnPlatform(Vector3 feetWorld)
+    {
+        if (!capsule) capsule = GetComponentInChildren<CapsuleCollider>();
+        if (!body) body = GetComponent<Rigidbody>();
+        platformFeetOffset = body.position.y - capsule.bounds.min.y;   // 根节点比脚底高多少
+        // 胶囊轴心往往不在根节点正下方，按包围盒中心把这点偏移扣掉，人才真站在凳子正中。
+        platformCapOffset = new Vector3(capsule.bounds.center.x - body.position.x, 0f,
+                                        capsule.bounds.center.z - body.position.z);
+        platformTarget = TargetOn(feetWorld);
+        platformLock = true;
+        stepOffTimer = 0f;
+        body.useGravity = false;
+        body.velocity = Vector3.zero;
+        body.angularVelocity = Vector3.zero;
+        body.position = platformTarget;
+        Physics.SyncTransforms();
+    }
+
+    /// <summary>凳子被挪动时跟着更新落脚点。</summary>
+    public void KeepOnPlatform(Vector3 feetWorld)
+    {
+        if (!platformLock) return;
+        platformTarget = TargetOn(feetWorld);
+    }
+
+    /// <summary>把“脚底点”换算成角色根节点该在的位置（扣掉胶囊的水平偏移）。</summary>
+    Vector3 TargetOn(Vector3 feetWorld)
+    {
+        return new Vector3(feetWorld.x - platformCapOffset.x,
+                           feetWorld.y + platformFeetOffset,
+                           feetWorld.z - platformCapOffset.z);
+    }
+
+    public void LeavePlatform()
+    {
+        if (!platformLock) return;
+        platformLock = false;
+        if (body) body.useGravity = true;
+    }
+
+    /// <summary>
+    /// 站在凳面上时接管移动：每帧把位置钉死，重力不再作用，所以不可能往下掉。
+    /// 只有玩家按住方向键超过 0.22 秒，才会朝那个方向迈下去。
+    /// </summary>
+    void UpdatePlatform(float dt)
+    {
+        if (direction.sqrMagnitude > .001f) stepOffTimer += dt; else stepOffTimer = 0f;
+        if (stepOffTimer > .22f && StepOff(direction)) return;
+
+        body.velocity = Vector3.zero;
+        body.MovePosition(platformTarget);
+        onFloor = true;
+        Play(Idle);
+        animator.speed = 0f;
+        firstPerson?.SetInteraction(false);
+    }
+
+    /// <summary>从凳面上迈下来：试四个方向，挑一个不撞墙的位置把角色放下去。</summary>
+    public bool StepOff(Vector3 preferred)
+    {
+        if (!platformLock) return false;
+        Vector3 fwd = Vector3.ProjectOnPlane(preferred, Vector3.up);
+        if (fwd.sqrMagnitude < .01f) fwd = Vector3.ProjectOnPlane(transform.forward, Vector3.up);
+        if (fwd.sqrMagnitude < .01f) fwd = Vector3.forward;
+        fwd.Normalize();
+
+        float radius = Mathf.Max(.18f, capsule.bounds.extents.x);
+        Vector3[] dirs = { fwd, Vector3.Cross(Vector3.up, fwd), -fwd, -Vector3.Cross(Vector3.up, fwd) };
+        foreach (var d in dirs)
+        {
+            Vector3 p = platformTarget + d * (radius + .3f);
+            if (BlockedAt(p)) continue;
+            platformLock = false;
+            body.useGravity = true;
+            body.position = p;
+            body.velocity = d * walkSpeed;
+            return true;
+        }
+        return false;
+    }
+
+    bool BlockedAt(Vector3 rootPos)
+    {
+        float r = Mathf.Max(.12f, capsule.bounds.extents.x * .85f);
+        float feetY = rootPos.y - platformFeetOffset;
+        Vector3 bottom = new Vector3(rootPos.x, feetY + r + .03f, rootPos.z);
+        Vector3 top = new Vector3(rootPos.x, rootPos.y, rootPos.z);
+        foreach (var hit in Physics.OverlapCapsule(bottom, top, r, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+        {
+            if (hit.isTrigger || hit.transform.IsChildOf(transform)) continue;
+            if (hit.GetComponentInParent<StoolStep>()) continue;   // 凳子本身不算障碍
+            return true;
+        }
+        return false;
+    }
+
+    // ---------- 推箱子 ----------
+
+    /// <summary>找脚下最近的可推物体，并记下接触面的法线（用来把推动方向锁到箱面法线）。</summary>
+    bool FindPushTarget(out PushProp prop, out Vector3 normal, out float gap)
+    {
+        prop = null; normal = Vector3.zero; gap = 0f;
+        float best = float.MaxValue;
+        foreach (var hit in body.SweepTestAll(direction.normalized, pushReach, QueryTriggerInteraction.Ignore))
+        {
+            if (Mathf.Abs(hit.normal.y) >= .65f) continue;
+            if (hit.collider.GetComponentInParent<PlayerController>()) continue;
+            var candidate = hit.collider.GetComponentInParent<PushProp>();
+            if (!candidate || hit.distance >= best) continue;
+            best = hit.distance; prop = candidate; normal = hit.normal;
+        }
+        if (prop && best < float.MaxValue) gap = Mathf.Max(0f, best);
+        return prop != null;
+    }
+
     void Play(int state)
     {
         if (playing == state) return;

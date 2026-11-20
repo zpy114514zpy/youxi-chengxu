@@ -21,6 +21,7 @@ public sealed class PlayerInventory : MonoBehaviour
     void Update()
     {
         target=null;prompt="";
+        if(UiInputBlocker.Active)return;
         if(StoryProgress.Instance && StoryProgress.Instance.IsReading)return;
         if(Input.GetKeyDown(KeyCode.B))SetOpen(!IsOpen);
         if(IsOpen&&Input.GetKeyDown(KeyCode.Escape))SetOpen(false);
@@ -37,13 +38,17 @@ public sealed class PlayerInventory : MonoBehaviour
             var readable=hit.collider.GetComponentInParent<ReadableClue>();
             var item=hit.collider.GetComponentInParent<PickupItem>();
             var push=hit.collider.GetComponentInParent<PushProp>();
-            if(!placement && !readable && !door && !furniture && !item && !push)continue;
+            var keypad=hit.collider.GetComponentInParent<PasswordBoxPuzzle>();
+            var stool=hit.collider.GetComponentInParent<StoolStep>();
+            if(!placement && !readable && !door && !furniture && !item && !keypad && !stool && !push)continue;
             nearest=hit.distance;target=null;prompt="";
             if(placement){target=placement;prompt=placement.filled?"已归位":("E 摆放 "+placement.DisplayName);}
             else if(readable){target=readable;prompt="E 阅读 "+readable.title;}
             else if(door){target=door;prompt=door.GetComponentInParent<ExitBoundary>()?"E 查看门外白雾":"E 开门 / 关门";}
             else if(furniture){target=furniture;prompt=furniture.Prompt;}
             else if(item){target=item;prompt="E 拾取 "+item.displayName;}
+            else if(keypad){target=keypad;prompt=keypad.Prompt;}
+            else if(stool){target=stool;prompt=stool.Prompt;}
             else if(push)prompt="按住 Q + WASD 推动";
         }
         if(Input.GetKeyDown(KeyCode.E))
@@ -64,6 +69,8 @@ public sealed class PlayerInventory : MonoBehaviour
                 }
             }
             else if(target is FurnitureOpenable furniture)furniture.Toggle(transform.position);
+            else if(target is PasswordBoxPuzzle keypad)keypad.Interact();
+            else if(target is StoolStep stool)stool.Interact();
             else if(target is PickupItem item)Take(item);
         }
     }
@@ -113,7 +120,7 @@ public sealed class PlayerInventory : MonoBehaviour
         else if(prompt!="")
         {
             float width=Mathf.Min(520,Screen.width*.8f);
-            GUI.Box(new Rect((Screen.width-width)*.5f,Screen.height*.65f,width,50),prompt,style);
+            GUI.Box(new Rect((Screen.width-width)*.5f,Screen.height*.86f,width,50),prompt,style);
         }
         if(Time.unscaledTime<noticeUntil)
         {

@@ -13,8 +13,9 @@ public sealed class StoryProgress : MonoBehaviour
         public string title, body;
         public Texture2D texture;
         public bool modal;
-        public Page(string title, string body, Texture2D texture, bool modal)
-        { this.title=title; this.body=body; this.texture=texture; this.modal=modal; }
+        public bool center;
+        public Page(string title, string body, Texture2D texture, bool modal, bool center)
+        { this.title=title; this.body=body; this.texture=texture; this.modal=modal; this.center=center; }
     }
 
     readonly Queue<Page> pages = new Queue<Page>();
@@ -24,6 +25,10 @@ public sealed class StoryProgress : MonoBehaviour
     Font font;
     bool lampIntroShown;
     public bool IsReading => reading.HasValue || current.HasValue && current.Value.modal;
+    // 当前是否还有任意一页剧情/提示正在屏幕上（用来判断玩家是否已经把 UI 跳过）。
+    public bool IsShowingPage => current.HasValue || reading.HasValue;
+    // 屏幕上或队列里还有页面没播完：新的提示要等这些播完再弹，避免两条 UI 挤在一起。
+    public bool IsBusy => current.HasValue || reading.HasValue || pages.Count>0 || readingPages.Count>0;
     public bool HasFirstFragment => fragments.Contains("信封碎片①");
 
     void Awake()
@@ -56,7 +61,7 @@ public sealed class StoryProgress : MonoBehaviour
     public void Read(string title,string body,bool record=true)
     {
         readingPages.Clear();
-        foreach(var part in Split(body,64)) readingPages.Enqueue(new Page(title,part,detail,true));
+        foreach(var part in Split(body,64)) readingPages.Enqueue(new Page(title,part,detail,true,false));
         reading=readingPages.Count>0?readingPages.Dequeue():(Page?)null;
         if(record)RecordClue(title+"："+body);
     }
@@ -71,17 +76,56 @@ public sealed class StoryProgress : MonoBehaviour
         if(name=="信封碎片①")
         {
             readingPages.Clear();
-            reading=new Page("关卡一完成","恭喜通过关卡一：卧室书桌谜题",opening,true);
+            reading=new Page("关卡一完成","恭喜通过关卡一：卧室书桌谜题",opening,true,false);
             Enqueue("新的目标","请前往二楼一号房间1号门，完成第二个解密任务。");
+        }
+        else if(name=="信封碎片②")
+        {
+            OnSecondTaskCompleted();
+        }
+        else if(name=="信封碎片③")
+        {
+            OnThirdTaskCompleted();
         }
     }
 
     public void Enqueue(string message) => Enqueue("提示",message);
     public void Enqueue(string title,string message) => AddPages(title,message,guide,false);
+    /// <summary>屏幕正中的提示（不挡操作，空格继续）。</summary>
+    public void EnqueueCenter(string title,string message) => AddPages(title,message,guide,false,true);
 
-    void AddPages(string title,string body,Texture2D texture,bool modal)
+    /// <summary>第二个任务（密码箱）完成后的收尾。</summary>
+    public void OnSecondTaskCompleted()
     {
-        foreach(var part in Split(body,64))pages.Enqueue(new Page(title,part,texture,modal));
+        pages.Clear();
+        current=null;
+        AddPages("第二个任务完成","恭喜完成第二个任务",opening,true);
+        EnqueueCenter("提示","隔壁好像有什么动静，我去看看！");
+        EnqueueCenter("提示","请前往二楼一号房间一号门查看");
+    }
+
+    /// <summary>第三个任务完成后的收尾。</summary>
+    public void OnThirdTaskCompleted()
+    {
+        pages.Clear();
+        current=null;
+        AddPages("第三个任务完成","恭喜完成第三个任务",opening,true);
+        EnqueueCenter("线索","隔壁好像有什么动静，我去看看！");
+        EnqueueCenter("新的目标","请前往二楼一号房间一号门查看");
+    }
+
+    public void OnBedroomPuzzleSolved()
+    {
+        pages.Clear();
+        current=null;
+        AddPages("第一关《卧室书桌谜题》","恭喜通过关卡一：卧室书桌谜题",opening,true);
+        AddPages("信封碎片","书桌抽屉里出现了信封碎片，找到并拾取它。",opening,true);
+        AddPages("下一步","请前往二楼一号房间1号门，继续寻找线索。",opening,true);
+    }
+
+    void AddPages(string title,string body,Texture2D texture,bool modal,bool center=false)
+    {
+        foreach(var part in Split(body,64))pages.Enqueue(new Page(title,part,texture,modal,center));
         if(!current.HasValue && pages.Count>0)current=pages.Dequeue();
     }
 
@@ -111,6 +155,7 @@ public sealed class StoryProgress : MonoBehaviour
 
     void Update()
     {
+        if(UiInputBlocker.Active)return;      // 密码键盘打开时不推进剧情
         if(!Input.GetKeyDown(KeyCode.Space))return;
         if(reading.HasValue)
         { reading=readingPages.Count>0?readingPages.Dequeue():(Page?)null;return; }
@@ -124,7 +169,8 @@ public sealed class StoryProgress : MonoBehaviour
         var p=page.Value;
         float width=Mathf.Min(Screen.width*.88f,1100f);
         float height=Mathf.Min(Screen.height*(p.texture==opening?.5f:.42f),width*(p.texture==opening?.33f:.27f));
-        var rect=new Rect((Screen.width-width)*.5f,p.modal?(Screen.height-height)*.5f:Screen.height-height-45f,width,height);
+        bool isGuide=p.texture==guide;
+        var rect=new Rect((Screen.width-width)*.5f,PanelTop(p,height,isGuide),width,height);
         if(p.texture)
         {
             Rect uv=p.texture==opening?new Rect(.072f,.185f,.856f,.633f):p.texture==detail?new Rect(.003f,.201f,.994f,.6f):new Rect(0f,0f,1f,1f);
@@ -133,10 +179,27 @@ public sealed class StoryProgress : MonoBehaviour
         else GUI.Box(rect,"");
         float inset=width*.105f;
         float scale=Mathf.Clamp(width/1000f,.68f,1f);
-        bool isGuide=p.texture==guide;
-        GUI.Label(new Rect(rect.x+inset,rect.y+height*(isGuide ? .19f : .12f),width-2*inset,height*(isGuide ? .16f : .18f)),p.title,Style(Mathf.RoundToInt(26*scale),TextAnchor.MiddleCenter));
-        GUI.Label(new Rect(rect.x+inset,rect.y+height*(isGuide ? .40f : .34f),width-2*inset,height*(isGuide ? .31f : .40f)),p.body,Style(Mathf.RoundToInt(23*scale),TextAnchor.MiddleCenter));
+        // guide 贴图上方 0~19% 是锁形装饰、不在面板内，标题必须压在装饰下方并水平居中。
+        float titleY = isGuide ? .255f : .12f;
+        float titleH = isGuide ? .15f : .18f;
+        float bodyY  = isGuide ? .45f : .34f;
+        float bodyH  = isGuide ? .30f : .40f;
+        GUI.Label(new Rect(rect.x+inset,rect.y+height*titleY,width-2*inset,height*titleH),p.title,Style(Mathf.RoundToInt(26*scale),TextAnchor.MiddleCenter));
+        GUI.Label(new Rect(rect.x+inset,rect.y+height*bodyY,width-2*inset,height*bodyH),p.body,Style(Mathf.RoundToInt(23*scale),TextAnchor.MiddleCenter));
         GUI.Label(new Rect(rect.x+inset,rect.y+height*.77f,width-2*inset-12f,height*.12f),"空格继续",Style(Mathf.RoundToInt(19*scale),TextAnchor.MiddleRight));
+    }
+
+    /// <summary>
+    /// 提示面板的纵向位置。所有“提示 / 新的目标 / 房间介绍 / 线索”这类小面板统一停在一个高度：
+    /// 屏幕高度的 66%（比正中低一截，又不贴底），换文案、换房间都不会跳位置。
+    /// 剧情大页（opening/detail）仍然居中，那两页是整屏阅读。
+    /// </summary>
+    static float PanelTop(Page p,float height,bool isGuide)
+    {
+        float y;
+        if(isGuide) y=Screen.height*.66f-height*.5f;
+        else y=p.modal?(Screen.height-height)*.5f:Screen.height-height-45f;
+        return Mathf.Clamp(y,24f,Mathf.Max(24f,Screen.height-height-24f));
     }
 
     GUIStyle Style(int size,TextAnchor align)

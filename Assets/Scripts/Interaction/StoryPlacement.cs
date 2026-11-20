@@ -20,8 +20,14 @@ public sealed class StoryPlacement : MonoBehaviour
         item.transform.SetPositionAndRotation(transform.position,facing*Quaternion.Euler(0f,faceYawOffset,0f));
         item.gameObject.SetActive(true);
         var highlight=item.GetComponent<ProximityOutline>();if(highlight)highlight.enabled=false;
-        var visual=item.GetComponentInChildren<Renderer>();
-        if(visual)item.transform.position+=Vector3.up*(transform.position.y+.018f-visual.bounds.min.y);
+        var visuals=item.GetComponentsInChildren<Renderer>();
+        if(visuals.Length>0)
+        {
+            Bounds bounds=visuals[0].bounds;
+            for(int i=1;i<visuals.Length;i++)bounds.Encapsulate(visuals[i].bounds);
+            Vector3 target=transform.position+Vector3.up*.018f;
+            item.transform.position+=new Vector3(target.x-bounds.center.x,target.y-bounds.min.y,target.z-bounds.center.z);
+        }
         var rb=item.GetComponent<Rigidbody>();if(rb){rb.velocity=Vector3.zero;rb.isKinematic=true;}
         foreach(var c in item.GetComponentsInChildren<Collider>())c.enabled=false;
         foreach(var r in GetComponentsInChildren<Renderer>())r.enabled=false;
