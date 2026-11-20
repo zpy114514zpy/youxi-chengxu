@@ -12,6 +12,7 @@ public sealed class FurnitureOpenable : MonoBehaviour
     Quaternion closedRotation;
     float amount;
     bool opened;
+    Vector3 openingDirection;
     public string Prompt => slide ? "E 打开 / 关闭抽屉" : "E 打开 / 关闭柜门";
 
     void Awake()
@@ -19,15 +20,27 @@ public sealed class FurnitureOpenable : MonoBehaviour
         closedPosition = transform.position;
         closedRotation = transform.rotation;
         slideDirection = slideDirection.sqrMagnitude < .001f ? Vector3.forward : slideDirection.normalized;
+        openingDirection=slideDirection;
     }
 
-    public void Toggle() { opened = !opened; }
+    public void Toggle(Vector3 playerPosition)
+    {
+        if(!opened && slide)
+        {
+            var visual=GetComponentInChildren<Renderer>();
+            Vector3 center=visual?visual.bounds.center:transform.position;
+            Vector3 towardPlayer=Vector3.ProjectOnPlane(playerPosition-center,Vector3.up);
+            openingDirection=Vector3.Dot(slideDirection,towardPlayer)<0f?-slideDirection:slideDirection;
+        }
+        opened=!opened;
+    }
+    public void Toggle() { Toggle(transform.position+slideDirection); }
 
     void Update()
     {
         amount = Mathf.MoveTowards(amount, opened ? 1f : 0f, speed * Time.deltaTime);
         if (slide)
-            transform.position = closedPosition + slideDirection * (travel * amount);
+            transform.position = closedPosition + openingDirection * (travel * amount);
         else
             transform.SetPositionAndRotation(closedPosition, Quaternion.AngleAxis(openAngle * amount, Vector3.up) * closedRotation);
     }

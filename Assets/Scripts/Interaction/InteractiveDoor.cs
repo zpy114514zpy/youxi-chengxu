@@ -4,6 +4,8 @@ public sealed class InteractiveDoor : MonoBehaviour
     public Vector3 hingeLocal;
     public float openAngle=95f, angularSpeed=100f;
     float angle,target;
+    public bool IsOpen => Mathf.Abs(target)>5f || Mathf.Abs(angle)>5f;
+    public bool IsOpening => Mathf.Abs(target)>5f;
     Vector3 hinge;
     void Awake(){hinge=transform.TransformPoint(hingeLocal);}
     public void Toggle(Vector3 playerPosition)

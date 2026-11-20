@@ -55,6 +55,7 @@ public class PlayerController : MonoBehaviour
     void Start()
     {
         if (!GetComponent<StoryProgress>()) gameObject.AddComponent<StoryProgress>();
+        if (!GetComponent<FutureFog>()) gameObject.AddComponent<FutureFog>();
         inventory=GetComponent<PlayerInventory>();
         if (!inventory) inventory=gameObject.AddComponent<PlayerInventory>();
         if (!GetComponent<CrouchPose>()) gameObject.AddComponent<CrouchPose>();
@@ -63,7 +64,7 @@ public class PlayerController : MonoBehaviour
         standingCenter = capsule.center;
         // Earlier scenes serialized E for pushing; Q is now reserved for that action.
         if (pushKey == KeyCode.E) pushKey = KeyCode.Q;
-        if (pickupKey == KeyCode.F) pickupKey = KeyCode.None;
+        if (pickupKey == KeyCode.F || pickupKey == KeyCode.B) pickupKey = KeyCode.None;
         firstPerson = gameObject.AddComponent<FirstPersonView>();
         firstPerson.Initialize(animator, capsule, standingEyeHeight);
         lampInteraction = GetComponent<PlayerLampInteraction>();
@@ -89,6 +90,8 @@ public class PlayerController : MonoBehaviour
 
     void Update()
     {
+        if(StoryProgress.Instance && StoryProgress.Instance.IsReading)
+        {direction=Vector3.zero;pushHeld=false;return;}
         UpdateCrouch();
         if(inventory && inventory.IsOpen){direction=Vector3.zero;pushHeld=false;return;}
         Transform basis = orientation;

@@ -23,7 +23,7 @@ RenderSettings:
   m_AmbientSkyColor: {r: 0.212, g: 0.227, b: 0.259, a: 1}
   m_AmbientEquatorColor: {r: 0.114, g: 0.125, b: 0.133, a: 1}
   m_AmbientGroundColor: {r: 0.047, g: 0.043, b: 0.035, a: 1}
-  m_AmbientIntensity: 0.1
+  m_AmbientIntensity: 0.45
   m_AmbientMode: 0
   m_SubtractiveShadowColor: {r: 0.42, g: 0.478, b: 0.627, a: 1}
   m_SkyboxMaterial: {fileID: 10304, guid: 0000000000000000f000000000000000, type: 0}
@@ -948,7 +948,7 @@ Light:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 65723479}
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 10
   m_Type: 1
   m_Shape: 0
@@ -5576,7 +5576,7 @@ BoxCollider:
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 3
   m_Size: {x: 0.02, y: 0.02, z: 0.02}
   m_Center: {x: -0.0058757854, y: -0.0031091813, z: 0.0037199142}
@@ -8971,8 +8971,8 @@ Transform:
     type: 3}
   m_PrefabInstance: {fileID: 1159270759}
   m_PrefabAsset: {fileID: 0}
---- !u!65 &588348943
-BoxCollider:
+--- !u!64 &588348943
+MeshCollider:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
@@ -8989,9 +8989,10 @@ BoxCollider:
   m_IsTrigger: 0
   m_ProvidesContacts: 0
   m_Enabled: 1
-  serializedVersion: 3
-  m_Size: {x: 0.02, y: 0.02, z: 0.02}
-  m_Center: {x: 0, y: 0, z: 0.0039890925}
+  serializedVersion: 5
+  m_Convex: 0
+  m_CookingOptions: 30
+  m_Mesh: {fileID: 6711425430524579272, guid: 63a398aa778fba4449e4108618fb61c6, type: 3}
 --- !u!1 &593565260 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 1031339146, guid: dac1a000000000196391077016501894,
@@ -13849,7 +13850,7 @@ BoxCollider:
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 3
   m_Size: {x: 0.02, y: 0.02, z: 0.02}
   m_Center: {x: 0.0058757854, y: -0.0031247563, z: 0.0019643502}
@@ -15175,7 +15176,7 @@ BoxCollider:
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 3
   m_Size: {x: 0.02, y: 0.02, z: 0.02}
   m_Center: {x: 0.0058757854, y: -0.003134435, z: 0.0052532256}
@@ -15585,7 +15586,7 @@ BoxCollider:
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 3
   m_Size: {x: 0.02, y: 0.02, z: 0.02}
   m_Center: {x: 0.0058757854, y: -0.0031091813, z: 0.0037199142}
@@ -24698,7 +24699,7 @@ Light:
   m_Type: 1
   m_Shape: 0
   m_Color: {r: 1, g: 1, b: 1, a: 1}
-  m_Intensity: 5
+  m_Intensity: 0.5
   m_Range: 0
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.80208
@@ -70140,6 +70141,10 @@ PrefabInstance:
         type: 3}
       insertIndex: -1
       addedObject: {fileID: 1030983459}
+    - targetCorrespondingSourceObject: {fileID: 1031343415, guid: dac1a000000014260813972843064565,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1900000001}
   m_SourcePrefab: {fileID: 100100000, guid: dac1a000000014260813972843064565, type: 3}
 --- !u!1 &1030983458 stripped
 GameObject:
@@ -70162,6 +70167,20 @@ MonoBehaviour:
   hingeLocal: {x: -0.01121521, y: -0.67470694, z: 0.023254395}
   openAngle: 95
   angularSpeed: 100
+--- !u!114 &1900000001
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1030983458}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 293c921504b77314980586e9cb0b6a1e, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  doorNumber: 3
+  introduction:
 --- !u!1001 &1030983466
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1332364,7 +1332383,7 @@ BoxCollider:
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 3
   m_Size: {x: 0.02, y: 0.02, z: 0.02}
   m_Center: {x: -0.0058757854, y: -0.0031247563, z: 0.0019643502}
@@ -1341102,7 +1341121,7 @@ BoxCollider:
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 3
   m_Size: {x: 0.02, y: 0.02, z: 0.02}
   m_Center: {x: -0.0058757854, y: -0.003134435, z: 0.0052532256}

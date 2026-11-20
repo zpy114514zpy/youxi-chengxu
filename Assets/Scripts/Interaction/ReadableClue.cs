@@ -12,20 +12,32 @@ public sealed class ReadableClue : MonoBehaviour
     {
         meshes=GetComponentsInChildren<Renderer>();block=new MaterialPropertyBlock();view=Camera.main;
         var p=FindObjectOfType<PlayerController>();if(p)player=p.transform;
+        if(title.Contains("绘本"))
+        {
+            if(!GetComponent<ProximityOutline>())gameObject.AddComponent<ProximityOutline>();
+            return;
+        }
         foreach(var r in meshes)if(r)foreach(var material in r.materials)if(material && material.HasProperty("_EmissionColor"))material.EnableKeyword("_EMISSION");
     }
     void LateUpdate()
     {
         if(!player||meshes==null)return;
+        if(title.Contains("绘本"))return;
         bool near=(player.position-transform.position).sqrMagnitude<glowRange*glowRange;
         foreach(var r in meshes)if(r)
         {r.GetPropertyBlock(block);block.SetColor("_EmissionColor",near?Color.white*1.8f:Color.black);r.SetPropertyBlock(block);}
     }
     public void Read()
     {
-        StoryProgress.Instance?.Read(title,description);
+        string text=title.Contains("绘本")?"绘本里画着四个玩偶。找到它们，然后放到小床上对应的归位点。摆放顺序不限。":(description??"").Replace("照着绘本的顺序来","找到各自的归位点即可");
+        StoryProgress.Instance?.Read(title,text);
         if (!guideShown && !string.IsNullOrEmpty(guideAfterRead))
-        { guideShown=true; StoryProgress.Instance?.Enqueue(guideAfterRead); }
+        {
+            guideShown=true;
+            StoryProgress.Instance?.Enqueue(title.Contains("绘本")
+                ?"先找到四个玩偶，再把它们放到床上对应的归位点。可以按任意顺序摆放。"
+                :guideAfterRead);
+        }
     }
     void OnGUI()
     {

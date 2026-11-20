@@ -114,6 +114,7 @@ public class FirstPersonView : MonoBehaviour
 
     void Update()
     {
+        if(StoryProgress.Instance && StoryProgress.Instance.IsReading)return;
         var inventory=GetComponent<PlayerInventory>();
         if(inventory && inventory.IsOpen)return;
         if (Input.GetKeyDown(KeyCode.Escape))

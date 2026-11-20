@@ -5,7 +5,7 @@ public sealed class PlayerInventory : MonoBehaviour
 {
     public bool IsOpen {get;private set;}
     public float reach=1.7f;
-    [Min(1)] public int capacity=20;
+    [Range(1,20)] public int capacity=20;
     readonly List<PickupItem> items=new List<PickupItem>();
     int selected;
     int tab;
@@ -20,11 +20,12 @@ public sealed class PlayerInventory : MonoBehaviour
     void Awake(){font=Font.CreateDynamicFontFromOSFont(new[]{"Microsoft YaHei","Arial"},32);frame=Resources.Load<Texture2D>("StoryUI/inventory-frame");}
     void Update()
     {
-        if(Input.GetKeyDown(KeyCode.F))SetOpen(!IsOpen);
+        target=null;prompt="";
+        if(StoryProgress.Instance && StoryProgress.Instance.IsReading)return;
+        if(Input.GetKeyDown(KeyCode.B))SetOpen(!IsOpen);
         if(IsOpen&&Input.GetKeyDown(KeyCode.Escape))SetOpen(false);
         if(Input.GetKeyDown(KeyCode.G))Drop();
-        target=null;prompt="";
-        if(IsOpen||Cursor.lockState!=CursorLockMode.Locked||StoryProgress.Instance && StoryProgress.Instance.IsReading)return;
+        if(IsOpen||Cursor.lockState!=CursorLockMode.Locked)return;
         var cam=Camera.main;if(!cam)return;
         float nearest=reach;
         foreach(var hit in Physics.RaycastAll(cam.transform.position,cam.transform.forward,reach,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore))
@@ -40,7 +41,7 @@ public sealed class PlayerInventory : MonoBehaviour
             nearest=hit.distance;target=null;prompt="";
             if(placement){target=placement;prompt=placement.filled?"已归位":("E 摆放 "+placement.DisplayName);}
             else if(readable){target=readable;prompt="E 阅读 "+readable.title;}
-            else if(door){target=door;prompt="E 开门 / 关门";}
+            else if(door){target=door;prompt=door.GetComponentInParent<ExitBoundary>()?"E 查看门外白雾":"E 开门 / 关门";}
             else if(furniture){target=furniture;prompt=furniture.Prompt;}
             else if(item){target=item;prompt="E 拾取 "+item.displayName;}
             else if(push)prompt="按住 Q + WASD 推动";
@@ -49,15 +50,20 @@ public sealed class PlayerInventory : MonoBehaviour
         {
             if(target is StoryPlacement placement)
             {
-                if(!placement.Place(this))ShowNotice(placement.filled?"这里已经摆好了":"请按绘本顺序选择对应玩偶，再按 E 摆放");
+                if(!placement.Place(this))ShowNotice(placement.filled?"这里已经摆好了":"请选中对应的玩偶，再按 E 摆放");
             }
             else if(target is ReadableClue readable)readable.Read();
             else if(target is InteractiveDoor door)
             {
-                door.Toggle(transform.position);
-                var intro=door.GetComponent<DoorRoomIntro>();if(intro)intro.OnOpened();
+                var boundary=door.GetComponentInParent<ExitBoundary>();
+                if(boundary)boundary.Deny();
+                else
+                {
+                    door.Toggle(transform.position);
+                    var intro=door.GetComponent<DoorRoomIntro>();if(intro && door.IsOpening)intro.OnOpened();
+                }
             }
-            else if(target is FurnitureOpenable furniture)furniture.Toggle();
+            else if(target is FurnitureOpenable furniture)furniture.Toggle(transform.position);
             else if(target is PickupItem item)Take(item);
         }
     }
@@ -143,7 +149,7 @@ public sealed class PlayerInventory : MonoBehaviour
         }
         if(tab==0)DrawSlots();else if(tab==1)DrawFragments();else DrawClues();
         DrawDetail();
-        GUI.Label(new Rect(128,890,820,52),"容量  "+items.Count+" / "+capacity+"     F 关闭    G 丢弃所选道具",TextStyle(28,TextAnchor.MiddleLeft,cyan));
+        GUI.Label(new Rect(128,890,820,52),"容量  "+items.Count+" / "+capacity+"     B 关闭    G 丢弃所选道具",TextStyle(28,TextAnchor.MiddleLeft,cyan));
         if(GUI.Button(new Rect(1407,70,64,55),"×",TextStyle(48,TextAnchor.MiddleCenter,cyan)))SetOpen(false);
         GUI.matrix=original;
     }

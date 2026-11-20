@@ -11,6 +11,7 @@ public sealed class PlayerLampInteraction : MonoBehaviour
     void Update()
     {
         target = null;
+        if(StoryProgress.Instance && StoryProgress.Instance.IsReading)return;
         var camera = Camera.main;
         if (!camera || Cursor.lockState != CursorLockMode.Locked) return;
         float nearest = reach;

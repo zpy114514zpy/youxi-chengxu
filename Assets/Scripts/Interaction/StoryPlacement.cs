@@ -7,11 +7,17 @@ public sealed class StoryPlacement : MonoBehaviour
     public int order;
     public SequencePlacementPuzzle puzzle;
     public bool filled;
+    [Tooltip("模型正面与 Unity +Z 轴之间的水平角度。")]
+    public float faceYawOffset;
     public bool Place(PlayerInventory inventory)
     {
         if(filled||!puzzle||!puzzle.CanPlace(order))return false;
         var item=inventory.ConsumeSelected(requiredItemId);if(!item)return false;
-        item.transform.SetPositionAndRotation(transform.position,transform.rotation);
+        var player=inventory.GetComponent<PlayerController>();
+        Vector3 toward=player?player.transform.position-transform.position:transform.forward;
+        toward.y=0f;
+        Quaternion facing=toward.sqrMagnitude>.001f?Quaternion.LookRotation(toward.normalized,Vector3.up):transform.rotation;
+        item.transform.SetPositionAndRotation(transform.position,facing*Quaternion.Euler(0f,faceYawOffset,0f));
         item.gameObject.SetActive(true);
         var highlight=item.GetComponent<ProximityOutline>();if(highlight)highlight.enabled=false;
         var visual=item.GetComponentInChildren<Renderer>();
@@ -36,6 +42,6 @@ public sealed class StoryPlacement : MonoBehaviour
         if(focused!=this)return;
         Vector3 point=Camera.main.WorldToScreenPoint(transform.position+Vector3.up*.18f);
         if(point.z<=0)return;
-        GUI.Box(new Rect(point.x-90,Screen.height-point.y-38,180,30),"归位 "+(order+1)+" · "+DisplayName);
+        GUI.Box(new Rect(point.x-90,Screen.height-point.y-38,180,30),"归位 · "+DisplayName);
     }
 }
