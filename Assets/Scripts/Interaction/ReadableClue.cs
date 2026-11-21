@@ -23,7 +23,7 @@ public sealed class ReadableClue : MonoBehaviour
     }
     void LateUpdate()
     {
-        if(!player||meshes==null)return;
+        if(!player||meshes==null||block==null)return;
         if(title.Contains("绘本")||!emissive)return;
         bool near=(player.position-transform.position).sqrMagnitude<glowRange*glowRange;
         foreach(var r in meshes)if(r)

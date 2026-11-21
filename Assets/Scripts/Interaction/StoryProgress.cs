@@ -104,14 +104,14 @@ public sealed class StoryProgress : MonoBehaviour
         EnqueueCenter("提示","请前往二楼一号房间一号门查看");
     }
 
-    /// <summary>第三个任务完成后的收尾。</summary>
+    /// <summary>第三个任务（积木谜题）完成后的收尾。</summary>
     public void OnThirdTaskCompleted()
     {
         pages.Clear();
         current=null;
-        AddPages("第三个任务完成","恭喜完成第三个任务",opening,true);
-        EnqueueCenter("线索","隔壁好像有什么动静，我去看看！");
-        EnqueueCenter("新的目标","请前往二楼一号房间一号门查看");
+        AddPages("积木谜题完成","恭喜完成积木谜题！",opening,true);
+        EnqueueCenter("提示","玩家可以打开二楼二号房间了");
+        EnqueueCenter("内心独白","我记得，二楼二号门的钥匙好像被遗落在哪里了，好像在走廊里？");
     }
 
     public void OnBedroomPuzzleSolved()

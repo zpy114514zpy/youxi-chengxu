@@ -40,13 +40,17 @@ public sealed class PlayerInventory : MonoBehaviour
             var push=hit.collider.GetComponentInParent<PushProp>();
             var keypad=hit.collider.GetComponentInParent<PasswordBoxPuzzle>();
             var stool=hit.collider.GetComponentInParent<StoolStep>();
-            if(!placement && !readable && !door && !furniture && !item && !keypad && !stool && !push)continue;
+            var pile=hit.collider.GetComponentInParent<BlockPuzzle>();
+            if(!placement && !readable && !door && !furniture && !item && !keypad && !stool && !push && !pile)continue;
+            // 箱子打开后箱体还会挡住射线：它不再是交互目标，直接跳过，让箱口里的碎片能被瞄准。
+            if(keypad && keypad.Unlocked && !item)continue;
             nearest=hit.distance;target=null;prompt="";
             if(placement){target=placement;prompt=placement.filled?"已归位":("E 摆放 "+placement.DisplayName);}
             else if(readable){target=readable;prompt="E 阅读 "+readable.title;}
             else if(door){target=door;prompt=door.GetComponentInParent<ExitBoundary>()?"E 查看门外白雾":"E 开门 / 关门";}
             else if(furniture){target=furniture;prompt=furniture.Prompt;}
             else if(item){target=item;prompt="E 拾取 "+item.displayName;}
+            else if(pile){target=pile;prompt=pile.Prompt;}
             else if(keypad){target=keypad;prompt=keypad.Prompt;}
             else if(stool){target=stool;prompt=stool.Prompt;}
             else if(push)prompt="按住 Q + WASD 推动";
@@ -70,6 +74,7 @@ public sealed class PlayerInventory : MonoBehaviour
             }
             else if(target is FurnitureOpenable furniture)furniture.Toggle(transform.position);
             else if(target is PasswordBoxPuzzle keypad)keypad.Interact();
+            else if(target is BlockPuzzle blockPile)blockPile.Interact(this);
             else if(target is StoolStep stool)stool.Interact();
             else if(target is PickupItem item)Take(item);
         }
@@ -95,6 +100,28 @@ public sealed class PlayerInventory : MonoBehaviour
         if(!item||item.storyId!=id)return null;
         items.Remove(item);selected=Mathf.Clamp(selected,0,Mathf.Max(0,items.Count-1));
         return item;
+    }
+    /// <summary>背包里有没有积木块（积木谜题用）。</summary>
+    public bool HasBlock
+    {
+        get
+        {
+            foreach(var item in items)if(item&&item.storyId!=null&&item.storyId.StartsWith("block_"))return true;
+            return false;
+        }
+    }
+    /// <summary>取出一块积木（积木谜题放置时用），取不到返回 null。</summary>
+    public PickupItem TakeBlock()
+    {
+        for(int i=0;i<items.Count;i++)
+        {
+            var item=items[i];
+            if(!item||item.storyId==null||!item.storyId.StartsWith("block_"))continue;
+            items.RemoveAt(i);
+            selected=Mathf.Clamp(selected,0,Mathf.Max(0,items.Count-1));
+            return item;
+        }
+        return null;
     }
     void ShowNotice(string value){notice=value;noticeUntil=Time.unscaledTime+2.5f;}
     void SetOpen(bool value){IsOpen=value;Cursor.lockState=value?CursorLockMode.None:CursorLockMode.Locked;Cursor.visible=value;}

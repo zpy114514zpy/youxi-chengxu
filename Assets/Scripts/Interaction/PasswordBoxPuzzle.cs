@@ -28,18 +28,15 @@ public sealed class PasswordBoxPuzzle : MonoBehaviour
     [Tooltip("房间介绍播完之后，还要在箱子下站这么久才提示找凳子。")]
     public float hintDelay = .8f;
 
-    bool typing, unlocked, hintedStool, hintedCalendar, fragmentReady;
+    bool typing, unlocked, hintedStool, hintedCalendar;
     float hintDwell;
     DoorRoomIntro roomDoor;
     string input = "";
     float errorUntil;
     GameObject fragment;
     Vector3 fragmentHome;
-    GameObject lidObject;
-    Vector3 lidHinge, lidRestPos;
-    Quaternion lidRestRot;
-    Vector3 lidAxis;
-    bool lidBuilt;
+    bool lidHidden;
+    bool topRemoved;
     PlayerController player;
     Font font;
 
@@ -219,6 +216,8 @@ public sealed class PasswordBoxPuzzle : MonoBehaviour
     void Unlock()
     {
         unlocked = true;
+        // 箱子已经打开，青色描边高亮会盖住箱口，直接关掉。
+        foreach (var outline in GetComponentsInChildren<ProximityOutline>(true)) outline.enabled = false;
         StoryProgress.Instance?.RecordClue("密码箱密码正确：20221005。");
         StartCoroutine(OpenRoutine());
         Debug.Log("[密码箱] 密码正确，箱子打开", this);
@@ -228,20 +227,13 @@ public sealed class PasswordBoxPuzzle : MonoBehaviour
     {
         Bounds box = BoxBounds();
 
-        // 1) 盖子自动弹开（箱子模型是一整块，这里另做一块薄盖板，绕后侧顶边掀起来）。
-        BuildLid(box);
-        float t = 0f;
-        const float lidDuration = .55f;
-        while (t < lidDuration)
-        {
-            t += Time.deltaTime;
-            float k = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t / lidDuration));
-            SetLidAngle(16f * k);
-            yield return null;
-        }
-        SetLidAngle(16f);
+        // 1) 把箱子的顶面从网格里删掉：玩家看到的就是一个真正开了口、里面空着的箱子。
+        //    （不做盖板、也不铺任何遮挡物。）
+        RemoveTopFace(box);
+        // 兼容旧版本：如果场景里残留了一块叫“密码箱盖子”的板子，一并清掉。
+        HideLid();
 
-        // 2) 箱子里的拼图碎片（Plane002）从箱口飘出来，等玩家按 E 拾取。
+        // 2) 碎片（Plane002）本来就在箱子里，让它平躺在箱口内侧，等玩家对准按 E 拾取。
         if (!fragment) fragment = FindFragmentModel();
         if (!fragment)
         {
@@ -249,127 +241,95 @@ public sealed class PasswordBoxPuzzle : MonoBehaviour
             yield break;
         }
         fragment.SetActive(true);
+
         SetupFragment();
 
-        Vector3 toward = TowardPlayer(box);
-        Bounds now = BoxBounds();
-        // 箱子正上方就是隔板，碎片在原地升起会被挡住；让它从箱口前方飘出来、停在玩家眼前。
-        float halfDepth = Mathf.Abs(toward.x) * now.extents.x + Mathf.Abs(toward.z) * now.extents.z;
-        Vector3 start = new Vector3(now.center.x, now.max.y - .03f, now.center.z) + toward * (halfDepth + .02f);
-        Vector3 startScale = fragment.transform.localScale;
-        fragmentHome = new Vector3(now.center.x, now.max.y + .02f, now.center.z) + toward * .19f;
-        fragment.transform.position = start;
+        // 碎片轴心不在纸片中心（模型自带偏移），按纸面包围盒把纸片摆到箱口正中。
+        fragment.transform.rotation = Quaternion.Euler(0f, fragment.transform.eulerAngles.y, 0f);
+        Vector3 target = new Vector3(box.center.x, box.max.y - .026f, box.center.z);
+        var paperRenderer = fragment.GetComponentInChildren<Renderer>();
+        if (paperRenderer) target += fragment.transform.position - paperRenderer.bounds.center;
+        fragmentHome = target;
+        fragment.transform.position = target;
 
-        float rise = 0f;
-        const float riseDuration = .5f;
-        while (rise < riseDuration)
-        {
-            rise += Time.deltaTime;
-            float k = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(rise / riseDuration));
-            if (!fragment) yield break;
-            fragment.transform.position = Vector3.Lerp(start, fragmentHome, k);
-            fragment.transform.localScale = startScale * Mathf.Lerp(.35f, 1.5f, k);
-            yield return null;
-        }
-        if (!fragment) yield break;
-        fragment.transform.localScale = startScale * 1.5f;
-        fragment.transform.position = fragmentHome;
-        fragmentReady = true;
-
-        Debug.Log("[密码箱] 盖子已打开，碎片 " + fragment.name + " 位于 " + fragmentHome.ToString("F3"), this);
+        Debug.Log("[密码箱] 顶面已删除，碎片躺在箱口 " + fragmentHome.ToString("F3"), this);
     }
 
     /// <summary>
-    /// 箱口正上方只有 9 厘米净空（衣柜隔板）、下面又是层板，盖子的活动余地很小。
-    /// 这里全部用世界坐标算：盖板先盖在箱口上，再绕后侧顶边那条轴旋转（最多 16°，前缘抬起 8.8 厘米）。
+    /// 直接改网格：把箱顶那一片三角面剔掉。箱子是单材质闭合模型，
+    /// 删掉顶面后就真的“敞口”了，不需要任何额外的板子或暗面。
     /// </summary>
-    void BuildLid(Bounds box)
+    void RemoveTopFace(Bounds box)
     {
-        if (lidBuilt) return;
-        lidBuilt = true;
-
-        Vector3 toward = TowardPlayer(box);
-        Vector3 right = Vector3.Cross(Vector3.up, toward).normalized;
-        float halfDepth = Mathf.Abs(toward.x) * box.extents.x + Mathf.Abs(toward.z) * box.extents.z;
-        float halfWidth = Mathf.Abs(right.x) * box.extents.x + Mathf.Abs(right.z) * box.extents.z;
-
-        var lid = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        lid.name = "密码箱盖子";
-        var lidCollider = lid.GetComponent<Collider>();
-        if (lidCollider) Destroy(lidCollider);
-
-        // 盖好时的世界位置：箱口正中、贴着箱顶；尺寸正好盖住箱口。
-        lidRestPos = new Vector3(box.center.x, box.max.y + .008f, box.center.z);
-        lidRestRot = Quaternion.LookRotation(toward, Vector3.up);
-        lid.transform.SetPositionAndRotation(lidRestPos, lidRestRot);
-        lid.transform.localScale = new Vector3(halfWidth * 2f, .012f, halfDepth * 2f);
-
-        var source = GetComponentInChildren<MeshRenderer>();
-        if (source && source.sharedMaterial) lid.GetComponent<MeshRenderer>().sharedMaterial = source.sharedMaterial;
-
-        lidObject = lid;
-        // 铰轴：后侧顶边中点；旋转轴是水平方向里和 toward 垂直的那个轴。
-        lidHinge = new Vector3(box.center.x, box.max.y, box.center.z) - toward * halfDepth;
-        lidAxis = right;
-    }
-
-    /// <summary>把盖子绕后侧顶边转到 angle 度（0=盖好，正值=前缘抬起）。</summary>
-    void SetLidAngle(float angle)
-    {
-        if (!lidObject) return;
-        Quaternion spin = Quaternion.AngleAxis(-angle, lidAxis);
-        lidObject.transform.position = lidHinge + spin * (lidRestPos - lidHinge);
-        lidObject.transform.rotation = spin * lidRestRot;
-    }
-
-    /// <summary>
-    /// 场景里的 Plane002 / 对象007 都是空网格（只有包围盒、没有三角面），直接显示什么都看不见。
-    /// 这里用同一个信封材质铺一张小纸片，放在碎片轴心上，保证玩家看得到、也瞄得准。
-    /// </summary>
-    Renderer BuildPaper()
-    {
-        var existing = fragment.transform.Find("碎片纸片");
-        if (existing) return existing.GetComponent<Renderer>();
-
-        Material material = null;
-        foreach (var r in fragment.GetComponentsInChildren<Renderer>(true))
+        if (topRemoved) return;
+        var filter = GetComponentInChildren<MeshFilter>();
+        if (!filter || !filter.sharedMesh)
         {
-            if (r.sharedMaterial) material = r.sharedMaterial;
-            r.enabled = false;                       // 空网格不参与渲染
+            Debug.LogWarning("[密码箱] 没有找到箱子网格，无法删除顶面。", this);
+            return;
+        }
+        var mesh = filter.sharedMesh;
+        if (!mesh.isReadable)
+        {
+            Debug.LogWarning("[密码箱] 箱子网格不可读（Read/Write 关闭），无法删除顶面。", this);
+            return;
+        }
+        topRemoved = true;
+
+        var verts = mesh.vertices;
+        var tris = mesh.triangles;
+        var keep = new List<int>(tris.Length);
+        Transform origin = filter.transform;
+        float cut = box.max.y - .012f;
+
+        for (int i = 0; i + 2 < tris.Length; i += 3)
+        {
+            Vector3 centroid = (verts[tris[i]] + verts[tris[i + 1]] + verts[tris[i + 2]]) / 3f;
+            if (origin.TransformPoint(centroid).y > cut) continue;     // 顶面整片丢掉
+            keep.Add(tris[i]);
+            keep.Add(tris[i + 1]);
+            keep.Add(tris[i + 2]);
         }
 
-        var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
-        quad.name = "碎片纸片";
-        var quadCollider = quad.GetComponent<Collider>();
-        if (quadCollider) Destroy(quadCollider);
-        quad.transform.position = fragment.transform.position;
-        // 玩家是踩在凳子上、几乎平视箱口的，纸片平放只会变成一条线；这里让它竖起来正对玩家。
-        // Quad 的正面朝 -Z，所以让 +Z 背对玩家，正面才朝向玩家、字不会左右反。
-        Vector3 toward = TowardPlayer(BoxBounds());
-        quad.transform.rotation = Quaternion.LookRotation(-(toward + Vector3.up * .28f).normalized, Vector3.up);
-        Vector3 lossy = fragment.transform.lossyScale;
-        quad.transform.localScale = new Vector3(
-            .10f / Mathf.Max(.0001f, Mathf.Abs(lossy.x)),
-            .10f / Mathf.Max(.0001f, Mathf.Abs(lossy.y)),
-            1f / Mathf.Max(.0001f, Mathf.Abs(lossy.z)));
-        quad.transform.SetParent(fragment.transform, true);
+        if (keep.Count == 0 || keep.Count == tris.Length)
+        {
+            Debug.LogWarning("[密码箱] 顶面三角面没有识别出来（删除前后都是 " + (tris.Length / 3) + " 个），箱子保持原样。", this);
+            return;
+        }
 
-        var paperRenderer = quad.GetComponent<MeshRenderer>();
-        if (material) paperRenderer.sharedMaterial = material;
-        var instance = paperRenderer.material;
-        if (instance.HasProperty("_Cull")) instance.SetFloat("_Cull", 0f);   // 双面
-        return paperRenderer;
+        var opened = Instantiate(mesh);
+        opened.name = mesh.name + "_开口";
+        opened.SetTriangles(keep, 0);
+        filter.sharedMesh = opened;
+
+        // 箱子是单面网格，去掉顶面后内壁的背面会被剔除；这里开双面，箱子里才有一圈内壁。
+        var renderer = filter.GetComponent<MeshRenderer>();
+        if (renderer && renderer.sharedMaterial)
+        {
+            var material = renderer.material;
+            if (material.HasProperty("_Cull")) material.SetFloat("_Cull", 0f);
+        }
+
+        Debug.Log("[密码箱] 已删除顶面：三角面 " + (tris.Length / 3) + " → " + (keep.Count / 3), this);
     }
 
-    Vector3 TowardPlayer(Bounds box)
+    /// <summary>旧版本会在箱子上挂一块“密码箱盖子”，这里把它关掉。</summary>
+    void HideLid()
     {
-        if (!player) player = FindObjectOfType<PlayerController>();
-        Vector3 target = player ? player.transform.position
-            : (Camera.main ? Camera.main.transform.position : transform.position + transform.forward);
-        Vector3 toward = Vector3.ProjectOnPlane(target - box.center, Vector3.up);
-        if (toward.sqrMagnitude < .0004f) toward = Vector3.ProjectOnPlane(transform.forward, Vector3.up);
-        if (toward.sqrMagnitude < .0004f) toward = Vector3.forward;
-        return toward.normalized;
+        if (lidHidden) return;
+        lidHidden = true;
+
+        foreach (var child in GetComponentsInChildren<Transform>(true))
+            if (child != transform && child.name == "密码箱盖子")
+                child.gameObject.SetActive(false);
+    }
+
+    static void SetColor(Material material, Color color)
+    {
+        if (!material) return;
+        if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", color);
+        if (material.HasProperty("_Color")) material.SetColor("_Color", color);
+        material.color = color;
     }
 
     GameObject FindFragmentModel()
@@ -390,7 +350,7 @@ public sealed class PasswordBoxPuzzle : MonoBehaviour
         return best ? best.gameObject : null;
     }
 
-    /// <summary>把场景里原本藏在箱子里的碎片挂上拾取组件、碰撞体和描边。</summary>
+    /// <summary>把场景里原本放在箱子里的碎片（Plane002）挂上拾取组件和碰撞体。</summary>
     void SetupFragment()
     {
         var envelope = fragment.GetComponent<EnvelopeFragment>();
@@ -405,32 +365,31 @@ public sealed class PasswordBoxPuzzle : MonoBehaviour
         pickup.itemType = "信封碎片";
         pickup.description = fragmentText;
 
-        BuildPaper();
+        // 纸片是单面片，翻个面就看不见了；开双面 + 一点自发光，箱子里才看得清。
+        var paper = fragment.GetComponentInChildren<Renderer>();
+        if (paper)
+        {
+            var material = paper.material;
+            if (material.HasProperty("_Cull")) material.SetFloat("_Cull", 0f);
+            if (material.HasProperty("_EmissionColor"))
+            {
+                material.EnableKeyword("_EMISSION");
+                material.SetColor("_EmissionColor", new Color(.16f, .15f, .13f, 1f));
+            }
+        }
 
         if (!fragment.GetComponent<Collider>())
         {
-            var renderer = fragment.GetComponentInChildren<Renderer>();
-            Vector3 world = renderer ? renderer.bounds.size : Vector3.one * .1f;
-            Vector3 scale = fragment.transform.lossyScale;
+            var scale = fragment.transform.lossyScale;
+            var bounds = paper ? paper.bounds : new Bounds(fragment.transform.position, Vector3.one * .1f);
             var box = fragment.AddComponent<BoxCollider>();
-            // 碎片很薄很小，拾取盒做成一个 0.22m 见方、0.10m 高的方盒，免得玩家明明瞄准了却打不中。
-            float flat = Mathf.Max(.22f, Mathf.Max(world.x, world.z));
+            // 纸片又小又薄，拾取盒放大到 0.18m 见方，玩家瞄准箱口里的纸面就能按到。
+            box.center = fragment.transform.InverseTransformPoint(bounds.center);
             box.size = new Vector3(
-                flat / Mathf.Max(.0001f, Mathf.Abs(scale.x)),
-                Mathf.Max(.10f, world.y) / Mathf.Max(.0001f, Mathf.Abs(scale.y)),
-                flat / Mathf.Max(.0001f, Mathf.Abs(scale.z)));
-            box.center = renderer ? fragment.transform.InverseTransformPoint(renderer.bounds.center) : Vector3.zero;
+                Mathf.Max(.18f, bounds.size.x) / Mathf.Max(.0001f, Mathf.Abs(scale.x)),
+                Mathf.Max(.12f, bounds.size.y) / Mathf.Max(.0001f, Mathf.Abs(scale.y)),
+                Mathf.Max(.18f, bounds.size.z) / Mathf.Max(.0001f, Mathf.Abs(scale.z)));
         }
-
-        // 碎片是一张极薄的纸片，描边壳会整片盖住纸面，这里不加描边，靠纸本身的材质。
-    }
-
-    void LateUpdate()
-    {
-        if (!fragmentReady || !fragment || !fragment.activeSelf) return;
-        // 轻微浮动，方便玩家在箱口注意到它。
-        float bob = Mathf.Sin(Time.time * 2.2f) * .012f;
-        fragment.transform.position = fragmentHome + Vector3.up * bob;
     }
 
     Bounds BoxBounds()
