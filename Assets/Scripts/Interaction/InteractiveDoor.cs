@@ -28,6 +28,9 @@ public sealed class InteractiveDoor : MonoBehaviour
             foreach(var other in Physics.OverlapBox(c.bounds.center,c.bounds.extents,Quaternion.identity,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore))
             {
                 if(other.transform.IsChildOf(transform))continue;
+                // 矮于 0.35m 的东西（地毯、门口的积木堆这类）不挡门：门扇直接从上面扫过去。
+                // 否则门口一放小物件，门就会卡在半路开不动。
+                if(other.bounds.size.y<.35f)continue;
                 if(Physics.ComputePenetration(c,c.transform.position,c.transform.rotation,other,other.transform.position,other.transform.rotation,out var dir,out float depth)&&depth>.025f)
                 { transform.SetPositionAndRotation(oldPosition,oldRotation);Physics.SyncTransforms();target=angle;return; }
             }

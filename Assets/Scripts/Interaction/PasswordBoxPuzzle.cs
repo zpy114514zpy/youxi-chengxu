@@ -242,11 +242,20 @@ public sealed class PasswordBoxPuzzle : MonoBehaviour
         }
         fragment.SetActive(true);
 
+        // 模型原尺寸只有 9cm 见方，摆在 32cm 的箱子里就是一小块白点，玩家根本认不出是信封碎片。
+        // 放大到 1.6 倍（约 15cm），打开箱子一眼就能看到纸面上的字。
+        var originalScale = fragment.transform.localScale;
+        fragment.transform.localScale = originalScale * 1.6f;
+
         SetupFragment();
 
-        // 碎片轴心不在纸片中心（模型自带偏移），按纸面包围盒把纸片摆到箱口正中。
-        fragment.transform.rotation = Quaternion.Euler(0f, fragment.transform.eulerAngles.y, 0f);
-        Vector3 target = new Vector3(box.center.x, box.max.y - .026f, box.center.z);
+        // 碎片轴心不在纸片中心（模型自带偏移），按纸面包围盒把纸片摆到箱口。
+        // 箱子塞在矮柜格里，上沿几乎贴着隔板，从外面只能从一条缝看进去：
+        // 压在箱底的纸片只剩一条白边，玩家根本认不出是信封。
+        // 所以把它挪到箱口靠玩家这一侧、翘起 20°，纸片露在盒口，低头就能看清纸上的字。
+        var yawRotation = Quaternion.Euler(0f, fragment.transform.eulerAngles.y, 0f);
+        fragment.transform.rotation = Quaternion.Euler(0f, 0f, -20f) * yawRotation;
+        Vector3 target = new Vector3(box.center.x - .055f, box.max.y - .012f, box.center.z);
         var paperRenderer = fragment.GetComponentInChildren<Renderer>();
         if (paperRenderer) target += fragment.transform.position - paperRenderer.bounds.center;
         fragmentHome = target;
@@ -365,15 +374,30 @@ public sealed class PasswordBoxPuzzle : MonoBehaviour
         pickup.itemType = "信封碎片";
         pickup.description = fragmentText;
 
-        // 纸片是单面片，翻个面就看不见了；开双面 + 一点自发光，箱子里才看得清。
+        // 纸片是单面片，翻个面就看不见了；开双面，并把纸自己的贴图当成自发光贴图。
+        // 光是用一个均匀的 _EmissionColor 提亮，箱子里很暗，纸会变成一块没有图案的灰白方块，
+        // 看不出是信封碎片；用贴图做自发光，暗处也能看清信封的纹理。
         var paper = fragment.GetComponentInChildren<Renderer>();
         if (paper)
         {
             var material = paper.material;
             if (material.HasProperty("_Cull")) material.SetFloat("_Cull", 0f);
-            if (material.HasProperty("_EmissionColor"))
+
+            Texture albedo = null;
+            if (material.HasProperty("_BaseMap")) albedo = material.GetTexture("_BaseMap");
+            if (!albedo && material.HasProperty("_MainTex")) albedo = material.GetTexture("_MainTex");
+
+            material.EnableKeyword("_EMISSION");
+            if (albedo && material.HasProperty("_EmissionMap"))
             {
-                material.EnableKeyword("_EMISSION");
+                material.SetTexture("_EmissionMap", albedo);
+                material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+                // 0.2 左右刚好：暗房间里纸自己亮一点，纸上的字还留得住；调高会把整张纸烧成纯白。
+                material.SetColor("_EmissionColor", new Color(.20f, .19f, .175f, 1f));
+            }
+            else
+            {
+                // 没有贴图可借：退回一点点均匀自发光，至少不会全黑。
                 material.SetColor("_EmissionColor", new Color(.16f, .15f, .13f, 1f));
             }
         }

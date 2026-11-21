@@ -192,6 +192,10 @@ public class PlayerController : MonoBehaviour
         horizontal = Vector3.MoveTowards(horizontal, desiredHorizontal, acceleration * dt);
         float vertical = body.velocity.y;
         if (grounded && desired.y > 0f) vertical = Mathf.Max(vertical, desired.y);
+        // 小台阶/压条辅助：门槛、地板压边这类 3~30cm 的凸起，胶囊只靠推力会被顶住走不过去
+        // （玩家表现就是“踩上去以后动不了”）。这里检测到矮台阶就轻轻抬一下。
+        if (grounded && moving && horizontal.sqrMagnitude > .01f)
+            vertical = Mathf.Max(vertical, StepAssist(horizontal.normalized));
         body.velocity = horizontal + Vector3.up * vertical;
         body.AddForce(Physics.gravity * (gravityMultiplier - 1f), ForceMode.Acceleration);
         Play(taking ? Pickup : pushing ? Push : moving ? Walk : Idle);
@@ -199,6 +203,36 @@ public class PlayerController : MonoBehaviour
         firstPerson?.SetInteraction(taking || pushing);
         // 推的时候把目标交给视角层，由它把双手按在物体表面（物体移动、手跟着移动）。
         firstPerson?.SetPush(pushing ? pushProp : null);
+    }
+
+    /// <summary>前方 3~30cm 的矮台阶：返回一个向上的速度，让胶囊能“蹭”上去；没有就返回 0。</summary>
+    float StepAssist(Vector3 direction)
+    {
+        var bounds = capsule.bounds;
+        float radius = Mathf.Max(.15f, Mathf.Min(bounds.extents.x, bounds.extents.z) * .8f);
+        Vector3 feet = new Vector3(bounds.center.x, bounds.min.y + .06f, bounds.center.z);
+        foreach (var hit in Physics.SphereCastAll(feet, radius, direction, radius + .34f, FloorMask,
+                     QueryTriggerInteraction.Ignore))
+        {
+            if (hit.collider.transform.IsChildOf(transform)) continue;
+            if (hit.normal.y > .85f) continue;                         // 平地，不用抬
+            float step = hit.collider.bounds.max.y - bounds.min.y;     // 这个物件顶部比脚底高多少
+            if (step < .015f || step > .30f) continue;
+            Vector3 lift = Vector3.up * (step + .05f);
+            // 注意：不能用 Physics.CheckCapsule —— 它会把玩家自己的胶囊也算成障碍，
+            // 于是永远判定“抬上去会顶头”，矮台阶永远上不去。
+            bool blocked = false;
+            foreach (var overlap in Physics.OverlapCapsule(bounds.min + lift, bounds.max + lift, radius * .85f,
+                         FloorMask, QueryTriggerInteraction.Ignore))
+            {
+                if (overlap.transform.IsChildOf(transform)) continue;
+                if (overlap.attachedRigidbody == body) continue;
+                blocked = true; break;
+            }
+            if (blocked) continue;                                     // 抬上去会顶头
+            return 2.2f;
+        }
+        return 0f;
     }
     // ---------- 可踩物（凳子） ----------
 

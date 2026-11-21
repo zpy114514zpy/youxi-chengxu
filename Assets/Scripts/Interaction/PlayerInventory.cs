@@ -17,6 +17,8 @@ public sealed class PlayerInventory : MonoBehaviour
     float noticeUntil;
     Font font;
     Texture2D frame;
+    StoryPlacement[] placements;
+    float placementRefresh;
     void Awake(){font=Font.CreateDynamicFontFromOSFont(new[]{"Microsoft YaHei","Arial"},32);frame=Resources.Load<Texture2D>("StoryUI/inventory-frame");}
     void Update()
     {
@@ -37,6 +39,9 @@ public sealed class PlayerInventory : MonoBehaviour
             var placement=hit.collider.GetComponentInParent<StoryPlacement>();
             var readable=hit.collider.GetComponentInParent<ReadableClue>();
             var item=hit.collider.GetComponentInParent<PickupItem>();
+            // 场景里的装饰玩具、书、已经摆好的玩偶都带 PickupItem：不是当前谜题要用的东西，
+            // 不允许拾取，连“E 拾取 玩具”的提示也不要出现。
+            if(item && !IsUseful(item))item=null;
             var push=hit.collider.GetComponentInParent<PushProp>();
             var keypad=hit.collider.GetComponentInParent<PasswordBoxPuzzle>();
             var stool=hit.collider.GetComponentInParent<StoolStep>();
@@ -47,7 +52,13 @@ public sealed class PlayerInventory : MonoBehaviour
             nearest=hit.distance;target=null;prompt="";
             if(placement){target=placement;prompt=placement.filled?"已归位":("E 摆放 "+placement.DisplayName);}
             else if(readable){target=readable;prompt="E 阅读 "+readable.title;}
-            else if(door){target=door;prompt=door.GetComponentInParent<ExitBoundary>()?"E 查看门外白雾":"E 开门 / 关门";}
+            else if(door)
+            {
+                target=door;
+                var gate=door.GetComponent<DoorLock>();
+                bool exitDoor=door.GetComponentInParent<ExitBoundary>();
+                prompt=exitDoor?"E 查看门外白雾":(gate&&gate.LockedReason(this)!=""?gate.LockedPrompt:"E 开门 / 关门");
+            }
             else if(furniture){target=furniture;prompt=furniture.Prompt;}
             else if(item){target=item;prompt="E 拾取 "+item.displayName;}
             else if(pile){target=pile;prompt=pile.Prompt;}
@@ -68,8 +79,14 @@ public sealed class PlayerInventory : MonoBehaviour
                 if(boundary)boundary.Deny();
                 else
                 {
-                    door.Toggle(transform.position);
-                    var intro=door.GetComponent<DoorRoomIntro>();if(intro && door.IsOpening)intro.OnOpened();
+                    // 二号房间的门：积木谜题没解开、或者还没拿到钥匙，都不允许打开。
+                    var gate=door.GetComponent<DoorLock>();
+                    if(gate && !door.IsOpen && !gate.TryUnlock(this)) { }
+                    else
+                    {
+                        door.Toggle(transform.position);
+                        var intro=door.GetComponent<DoorRoomIntro>();if(intro && door.IsOpening)intro.OnOpened();
+                    }
                 }
             }
             else if(target is FurnitureOpenable furniture)furniture.Toggle(transform.position);
@@ -79,6 +96,48 @@ public sealed class PlayerInventory : MonoBehaviour
             else if(target is PickupItem item)Take(item);
         }
     }
+    /// <summary>
+    /// 这个东西该不该允许拾取：
+    /// 只放行当前剧情要用的——信封碎片、积木、二号房间钥匙，以及“还没摆好”的归位谜题要的道具。
+    /// 其余（装饰玩具、书、已经摆到床上的玩偶）都不再提示拾取。
+    /// </summary>
+    bool IsUseful(PickupItem item)
+    {
+        if(!item)return false;
+        string id=item.storyId??"";
+        if(id.StartsWith("letter_fragment")||id.StartsWith("block_")||id=="room2_key")return true;
+        if(id.Length==0)return false;
+        if(placements==null||Time.unscaledTime>placementRefresh)
+        {
+            placements=FindObjectsOfType<StoryPlacement>();
+            placementRefresh=Time.unscaledTime+1.5f;
+        }
+        foreach(var placement in placements)
+            if(placement && !placement.filled && placement.requiredItemId==id)return true;
+        return false;
+    }
+
+    public bool HasItem(string id)
+    {
+        if(string.IsNullOrEmpty(id))return false;
+        foreach(var item in items)if(item && item.storyId==id)return true;
+        return false;
+    }
+
+    public bool ConsumeItem(string id)
+    {
+        if(string.IsNullOrEmpty(id))return false;
+        for(int i=0;i<items.Count;i++)
+        {
+            var item=items[i];
+            if(!item||item.storyId!=id)continue;
+            items.RemoveAt(i);
+            selected=Mathf.Clamp(selected,0,Mathf.Max(0,items.Count-1));
+            return true;
+        }
+        return false;
+    }
+
     public void Take(PickupItem item)
     {
         if (!item || items.Contains(item)) return;

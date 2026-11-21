@@ -22,11 +22,11 @@ public sealed class BlockPuzzle : MonoBehaviour
     /// <summary>五块积木在积木堆上的位置（相对积木堆中心，3 块一排、2 块一排）。</summary>
     static readonly Vector3[] SlotOffsets =
     {
-        new Vector3(-.22f, 0f, -.15f),
-        new Vector3( .00f, 0f, -.16f),
-        new Vector3( .22f, 0f, -.15f),
-        new Vector3(-.11f, 0f,  .17f),
-        new Vector3( .12f, 0f,  .16f)
+        new Vector3(-.28f, 0f, -.18f),
+        new Vector3( .00f, 0f, -.19f),
+        new Vector3( .28f, 0f, -.18f),
+        new Vector3(-.15f, 0f,  .19f),
+        new Vector3( .15f, 0f,  .18f)
     };
 
     const float BaseHeight = .056f;
@@ -75,7 +75,7 @@ public sealed class BlockPuzzle : MonoBehaviour
         // 交互用的碰撞盒：只比底座高一点点，玩家瞄着积木堆就能交互，也不至于变成一堵隐形墙。
         var body = gameObject.AddComponent<BoxCollider>();
         body.center = new Vector3(0f, .07f, 0f);
-        body.size = new Vector3(.86f, .14f, .72f);
+        body.size = new Vector3(1.00f, .14f, .86f);
 
         Debug.Log("[积木谜题] 积木堆已生成于 " + ground.ToString("F3") + "，可放置积木 " + blocks.Count + " 块。", this);
     }
@@ -91,7 +91,7 @@ public sealed class BlockPuzzle : MonoBehaviour
         if (baseCollider) Destroy(baseCollider);
         baseObject.transform.SetParent(transform, false);
         baseObject.transform.localPosition = new Vector3(0f, BaseHeight * .5f, 0f);
-        baseObject.transform.localScale = new Vector3(.80f, BaseHeight, .66f);
+        baseObject.transform.localScale = new Vector3(.94f, BaseHeight, .80f);
         if (wood) baseObject.GetComponent<MeshRenderer>().sharedMaterial = wood;
 
         // 积木堆整体有发光边框：玩家从门口一眼就能看到要往哪儿搬。
@@ -257,10 +257,17 @@ public sealed class BlockPuzzle : MonoBehaviour
         var renderer = block.GetComponentInChildren<Renderer>();
         Quaternion rotation = block.transform.rotation;
         Vector3 from = block.transform.position;
-        // 积木原来躺在地上，保持这个“离地高度”关系，落到积木堆上时底面正好贴着台面。
-        float lift = renderer ? block.transform.position.y - renderer.bounds.min.y : .02f;
-        Vector3 to = transform.position + SlotOffsets[index];
-        to.y = transform.position.y + BaseHeight + lift + .002f;
+        // 积木的轴心并不在模型中心（block 模型里每块积木都有很大的局部偏移）。
+        // 直接设 transform.position 会让模型落到槽位旁边去，所以先量出“轴心 → 视觉中心”的偏移，
+        // 摆放时反着扣掉，保证模型正好落在发光点上、底面贴着积木堆台面。
+        Bounds visual = renderer ? renderer.bounds : new Bounds(block.transform.position, Vector3.one * .1f);
+        Vector3 offset = visual.center - block.transform.position;
+        Vector3 slot = transform.position + SlotOffsets[index];
+        float top = transform.position.y + BaseHeight;
+        Vector3 to = new Vector3(
+            slot.x - offset.x,
+            top + visual.extents.y - offset.y + .002f,
+            slot.z - offset.z);
 
         float t = 0f;
         const float duration = .38f;
