@@ -46,7 +46,9 @@ public sealed class PlayerInventory : MonoBehaviour
             var keypad=hit.collider.GetComponentInParent<PasswordBoxPuzzle>();
             var stool=hit.collider.GetComponentInParent<StoolStep>();
             var pile=hit.collider.GetComponentInParent<BlockPuzzle>();
-            if(!placement && !readable && !door && !furniture && !item && !keypad && !stool && !push && !pile)continue;
+            var spot=hit.collider.GetComponentInParent<TidySpot>();
+            if(spot && spot.Prompt.Length==0)spot=null;
+            if(!placement && !readable && !door && !furniture && !item && !keypad && !stool && !push && !pile && !spot)continue;
             // 箱子打开后箱体还会挡住射线：它不再是交互目标，直接跳过，让箱口里的碎片能被瞄准。
             if(keypad && keypad.Unlocked && !item)continue;
             nearest=hit.distance;target=null;prompt="";
@@ -65,6 +67,7 @@ public sealed class PlayerInventory : MonoBehaviour
             else if(keypad){target=keypad;prompt=keypad.Prompt;}
             else if(stool){target=stool;prompt=stool.Prompt;}
             else if(push)prompt="按住 Q + WASD 推动";
+            else if(spot){target=spot;prompt=spot.Prompt;}
         }
         if(Input.GetKeyDown(KeyCode.E))
         {
@@ -94,6 +97,7 @@ public sealed class PlayerInventory : MonoBehaviour
             else if(target is BlockPuzzle blockPile)blockPile.Interact(this);
             else if(target is StoolStep stool)stool.Interact();
             else if(target is PickupItem item)Take(item);
+            else if(target is TidySpot tidySpot)tidySpot.Place(this);
         }
     }
     /// <summary>
@@ -106,6 +110,7 @@ public sealed class PlayerInventory : MonoBehaviour
         if(!item)return false;
         string id=item.storyId??"";
         if(id.StartsWith("letter_fragment")||id.StartsWith("block_")||id=="room2_key")return true;
+        if(id.StartsWith("tidy_"))return true;
         if(id.Length==0)return false;
         if(placements==null||Time.unscaledTime>placementRefresh)
         {
@@ -122,6 +127,21 @@ public sealed class PlayerInventory : MonoBehaviour
         if(string.IsNullOrEmpty(id))return false;
         foreach(var item in items)if(item && item.storyId==id)return true;
         return false;
+    }
+
+    /// <summary>取出一件道具（把对象本身交出去，归位摆放时要用）。</summary>
+    public PickupItem TakeItem(string id)
+    {
+        if(string.IsNullOrEmpty(id))return null;
+        for(int i=0;i<items.Count;i++)
+        {
+            var item=items[i];
+            if(!item||item.storyId!=id)continue;
+            items.RemoveAt(i);
+            selected=Mathf.Clamp(selected,0,Mathf.Max(0,items.Count-1));
+            return item;
+        }
+        return null;
     }
 
     public bool ConsumeItem(string id)

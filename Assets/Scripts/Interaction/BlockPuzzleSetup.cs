@@ -82,7 +82,7 @@ public static class BlockPuzzleSetup
     /// </summary>
     static Vector3 GroundPosition()
     {
-        Vector3 fallback = new Vector3(-17.409f, 3.209f, -91.039f);
+        Vector3 fallback = new Vector3(-17.409f, 3.209f, -92.039f);
         Transform door = null;
         foreach (var transform in AllTransforms())
             if (transform.name == DoorName) { door = transform; break; }
@@ -100,9 +100,11 @@ public static class BlockPuzzleSetup
         float groundY = probe.point.y;
 
         // 从门口往前一步步试：越靠近门越好，找到第一块干净的空地就停下。
+        // side 从 -1.15 起：原来的位置离左边那把单人沙发（SM_Chair_B1）只有 0.5m，
+        // 把积木堆整体往右（-z）挪 1m，和沙发拉开距离，又不会挡住门扇。
         for (float forward = 1.25f; forward <= 2.6f; forward += .15f)
         {
-            for (float side = -.15f; side >= -1.5f; side -= .15f)
+            for (float side = -1.15f; side >= -2.1f; side -= .10f)
             {
                 Vector3 spot = new Vector3(origin.x + forward, origin.y, origin.z + side);
                 if (!Physics.Raycast(spot, Vector3.down, out var hit, 4f,

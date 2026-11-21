@@ -3,9 +3,11 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 
 /// <summary>
-/// 让屋子里“本来就有抽屉模型、但没有交互”的抽屉都能按 E 拉开（向外拉，不是往里推）。
+/// 让屋子里“本来就有抽屉/柜门模型、但没有交互”的抽屉都能按 E 拉开。
 /// 场景里有一批空的“书桌抽屉 N”组件挂在没网格、没碰撞体的空物体上，按了没反应，
 /// 这里把它们清掉，改成挂到真正的抽屉网格上。
+///
+/// 规则（用户明确要求）：**所有抽屉、所有柜门，一律向外拉出来**，不允许往里推、也不允许旋转开。
 /// 运行时装配，不改场景文件。
 /// </summary>
 public static class DrawerSetup
@@ -16,32 +18,33 @@ public static class DrawerSetup
         if (!GameObject.Find("BP_Door_Inside_A5")) return;
         RemoveBrokenDrawers();
         int added = AttachToDrawerMeshes();
-        int fixedPanels = SlideWidePanels();
-        Debug.Log("[抽屉] 新装交互 " + added + " 个，改成向外平移 " + fixedPanels + " 个。");
+        int fixedPanels = MakeAllSlide();
+        Debug.Log("[抽屉] 新装交互 " + added + " 个，改成向外拉出 " + fixedPanels + " 个。");
     }
 
     /// <summary>
-    /// 宽而矮的面板（抽屉面板）如果被配成了“旋转柜门”，改成向外平移：
-    /// 抽屉只能是拉出来的，旋转开会穿进柜体。
+    /// 所有面板统一改成平移拉出。
+    /// travel 按面板类型给：抽屉盒（最薄的是高度）按深度的 85% 拉出，柜门固定 0.26m。
     /// </summary>
-    static int SlideWidePanels()
+    static int MakeAllSlide()
     {
         int fixedCount = 0;
         foreach (var openable in Object.FindObjectsOfType<FurnitureOpenable>())
         {
             if (!openable) continue;
-            // 二楼走廊那组电视柜（6 抽屉 + 2 柜门）统一按“拉出来”处理
-            bool shelfPanel = openable.name.Contains("SM_Shelf_TV_A1_Door");
-            if (!shelfPanel && openable.slide) continue;
             var renderer = openable.GetComponent<Renderer>();
             if (!renderer) renderer = openable.GetComponentInChildren<Renderer>();
             if (!renderer) continue;
+
             Vector3 size = renderer.bounds.size;
-            float width = Mathf.Max(size.x, size.z);
-            if (!shelfPanel && (size.y > .55f || width < size.y * 1.5f)) continue;   // 高面板是真的柜门，不动
+            bool drawerBox = size.y <= size.x && size.y <= size.z;   // 最薄的是高度 → 抽屉盒
+            float minHorizontal = Mathf.Min(size.x, size.z);
+
             openable.slide = true;
-            openable.travel = shelfPanel ? .26f : Mathf.Clamp(Mathf.Min(size.x, size.z) + .12f, .20f, .38f);
-            openable.speed = 2.4f;
+            openable.speed = 2.6f;
+            openable.travel = drawerBox
+                ? Mathf.Clamp(minHorizontal * .85f, .16f, .30f)
+                : .26f;
             fixedCount++;
         }
         return fixedCount;
@@ -67,8 +70,8 @@ public static class DrawerSetup
         foreach (var renderer in Object.FindObjectsOfType<MeshRenderer>())
         {
             if (!renderer) continue;
-            var mesh = renderer.GetComponent<MeshFilter>() ? renderer.GetComponent<MeshFilter>().sharedMesh : null;
-            string meshName = mesh ? mesh.name : "";
+            var filter = renderer.GetComponent<MeshFilter>();
+            string meshName = filter && filter.sharedMesh ? filter.sharedMesh.name : "";
             if (!IsDrawerMesh(meshName)) continue;
 
             var go = renderer.gameObject;
@@ -76,7 +79,7 @@ public static class DrawerSetup
             if (go.GetComponentInParent<EnvelopeFragment>()) continue;
 
             Bounds bounds = renderer.bounds;
-            if (bounds.size.y > .55f || bounds.size.x > 1.2f || bounds.size.z > 1.2f) continue;  // 不像抽屉面板
+            if (bounds.size.y > .55f || bounds.size.x > 1.2f || bounds.size.z > 1.2f) continue;  // 不像抽屉
 
             if (!go.GetComponent<Collider>())
             {
@@ -91,15 +94,15 @@ public static class DrawerSetup
 
             var openable = go.AddComponent<FurnitureOpenable>();
             openable.slide = true;
-            openable.speed = 2.4f;
-            openable.travel = Mathf.Clamp(Mathf.Max(bounds.extents.x, bounds.extents.z) + .10f, .22f, .38f);
+            openable.speed = 2.6f;
+            openable.travel = .26f;
             openable.slideDirection = Vector3.forward;    // 真实方向由 FurnitureOpenable 按柜体几何算
             added++;
         }
         return added;
     }
 
-    /// <summary>SM_Drawer_A1 的抽屉面板、办公桌（两张并排 = 8 个抽屉）的 Cab 面板，学生桌的 Draw N_low 抽屉盒，以及电视柜的 6 抽屉 + 2 柜门。</summary>
+    /// <summary>SM_Drawer_A1 的抽屉面板、办公桌的 Cab 面板、学生桌的 Draw N_low 抽屉盒、电视柜的 6 抽屉 + 2 柜门。</summary>
     static bool IsDrawerMesh(string name)
     {
         if (name.StartsWith("SM_Drawer_A1_Cab")) return true;

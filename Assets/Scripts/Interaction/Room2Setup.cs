@@ -4,35 +4,68 @@ using UnityEngine.SceneManagement;
 
 /// <summary>
 /// 二楼二号房间的运行时装配：
-/// ① 给二号门加门锁（积木谜题没解开不能开，解开后需要钥匙）；
-/// ② 把走廊里的 key(1) 做成可以按 E 拾取的钥匙。
+/// ① 二号房门（走廊里那扇 BP_Door_Inside_A2）上锁：积木谜题没解开不能开，解开后需要钥匙；
+/// ② 把电视柜第二层抽屉里的 key(1) 做成可以按 E 拾取的钥匙（位置不动，就在抽屉里）；
+/// ③ 房间里的小房间门（BP_Door_Inside_A7）先锁住，等整理谜题做完自动打开。
 /// 不改场景文件。
 /// </summary>
 public static class Room2Setup
 {
     const string KeyName = "key(1)";
+    const string RoomDoorName = "BP_Door_Inside_A2";
+    const string SmallDoorName = "BP_Door_Inside_A7";
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Setup()
     {
         if (!GameObject.Find("BP_Door_Inside_A5")) return;   // 只在这栋二层住宅里装配
-        LockSecondRoomDoor();
+
+        Transform roomDoor = FindByName(RoomDoorName);
+        Transform smallDoor = FindByName(SmallDoorName);
+
+        LockRoomDoor(roomDoor);
+        LockSmallDoor(smallDoor);
         SetupKey();
+        Room2Tidy.Build(smallDoor);
     }
 
-    static void LockSecondRoomDoor()
+    static Transform FindByName(string name)
     {
-        foreach (var door in Object.FindObjectsOfType<InteractiveDoor>())
-        {
-            var intro = door.GetComponent<DoorRoomIntro>();
-            if (!intro || intro.doorNumber != 2) continue;
-            if (!door.GetComponent<DoorLock>()) door.gameObject.AddComponent<DoorLock>();
-            Debug.Log("[二号房间] 门锁已挂到 " + door.name, door);
-            return;
-        }
-        Debug.LogWarning("[二号房间] 没找到 doorNumber=2 的门。");
+        foreach (var t in AllTransforms())
+            if (t.name == name && t.GetComponent<InteractiveDoor>())
+                return t;
+        return null;
     }
 
+    static void LockRoomDoor(Transform door)
+    {
+        if (!door) { Debug.LogWarning("[二号房间] 没找到 " + RoomDoorName); return; }
+        var gate = door.GetComponent<DoorLock>();
+        if (!gate) gate = door.gameObject.AddComponent<DoorLock>();
+        gate.requireBlockPuzzle = true;
+        gate.requiredItemId = "room2_key";
+        gate.requireRoom2Tidy = false;
+        gate.startsRoom2Tidy = true;
+        gate.lockedMessage = "门锁着，好像现在还不到时候。";
+        gate.needKeyMessage = "门锁着，得先找到钥匙。";
+        gate.unlockMessage = "";   // 开门后直接接「二楼二号房间」，不额外插一条开门提示
+        Debug.Log("[二号房间] 门锁已挂到 " + door.name, door);
+    }
+
+    static void LockSmallDoor(Transform door)
+    {
+        if (!door) { Debug.LogWarning("[二号房间] 没找到小房间门 " + SmallDoorName); return; }
+        var gate = door.GetComponent<DoorLock>();
+        if (!gate) gate = door.gameObject.AddComponent<DoorLock>();
+        gate.requireBlockPuzzle = false;      // 只要求整理完成
+        gate.requiredItemId = "";
+        gate.requireRoom2Tidy = true;
+        gate.startsRoom2Tidy = false;
+        gate.tidyLockedMessage = "这扇门打不开，得先把房间整理干净。";
+        Debug.Log("[二号房间] 小房间门已上锁 " + door.name, door);
+    }
+
+    /// <summary>电视柜第二层抽屉里的钥匙：位置完全不动，只补交互。</summary>
     static void SetupKey()
     {
         Transform key = null;
@@ -42,43 +75,38 @@ public static class Room2Setup
         }
         if (!key) { Debug.LogWarning("[二楼二号房间] 场景里没找到 " + KeyName); return; }
 
-        // 钥匙模型可能悬在半空：按脚下的地面把它放平。
         var renderers = key.GetComponentsInChildren<Renderer>(true);
         if (renderers.Length == 0) return;
         Bounds bounds = renderers[0].bounds;
         for (int i = 1; i < renderers.Length; i++) bounds.Encapsulate(renderers[i].bounds);
-
-        float floor = bounds.min.y;
-        foreach (var hit in Physics.RaycastAll(new Vector3(bounds.center.x, bounds.center.y + .3f, bounds.center.z),
-                     Vector3.down, 1.2f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
-            if (hit.point.y > 3.0f && hit.point.y < 3.35f) { floor = hit.point.y; break; }
-        if (bounds.min.y - floor > .02f)
-            key.position += Vector3.up * (floor + .006f - bounds.min.y);
 
         var pickup = key.GetComponent<PickupItem>();
         if (!pickup) pickup = key.gameObject.AddComponent<PickupItem>();
         pickup.displayName = "二楼二号房间的钥匙";
         pickup.storyId = "room2_key";
         pickup.itemType = "钥匙";
-        pickup.description = "在走廊角落里捡到的黄铜钥匙，齿纹和二楼二号房间的门锁对得上。";
+        pickup.description = "在电视柜第二层抽屉里找到的黄铜钥匙，齿纹和二楼二号房间的门锁对得上。";
 
         if (!key.GetComponent<Collider>())
         {
             var box = key.gameObject.AddComponent<BoxCollider>();
             Vector3 size = bounds.size;
             Vector3 scale = key.lossyScale;
+            // 钥匙本身只有几厘米，碰撞盒给到 8cm，玩家好瞄准；不要大到穿出抽屉。
             box.center = key.InverseTransformPoint(bounds.center);
             box.size = new Vector3(
-                Mathf.Max(.10f, size.x) / Mathf.Max(.0001f, Mathf.Abs(scale.x)),
-                Mathf.Max(.06f, size.y) / Mathf.Max(.0001f, Mathf.Abs(scale.y)),
-                Mathf.Max(.10f, size.z) / Mathf.Max(.0001f, Mathf.Abs(scale.z)));
+                Mathf.Clamp(size.x, .06f, .10f) / Mathf.Max(.0001f, Mathf.Abs(scale.x)),
+                Mathf.Clamp(size.y, .03f, .06f) / Mathf.Max(.0001f, Mathf.Abs(scale.y)),
+                Mathf.Clamp(size.z, .04f, .08f) / Mathf.Max(.0001f, Mathf.Abs(scale.z)));
         }
 
+        // 原来的描边太亮，糊成一团白光看不清是钥匙 —— 这里换成极淡的一圈暖色，
+        // 只在贴近时提示“这里有东西”，不抢模型的形。
         var outline = key.GetComponent<ProximityOutline>();
         if (!outline) outline = key.gameObject.AddComponent<ProximityOutline>();
-        outline.revealDistance = 3.2f;
-        outline.outlineWidth = .006f;
-        outline.outlineColor = new Color(1f, .84f, .35f, .95f);
+        outline.revealDistance = 1.8f;
+        outline.outlineWidth = .0022f;
+        outline.outlineColor = new Color(.85f, .68f, .30f, .45f);
 
         Debug.Log("[二楼二号房间] 钥匙已可拾取，位置 " + key.position.ToString("F3"), key);
     }
