@@ -100,13 +100,38 @@ public static class Room2Setup
                 Mathf.Clamp(size.z, .04f, .08f) / Mathf.Max(.0001f, Mathf.Abs(scale.z)));
         }
 
-        // 原来的描边太亮，糊成一团白光看不清是钥匙 —— 这里换成极淡的一圈暖色，
-        // 只在贴近时提示“这里有东西”，不抢模型的形。
+        // 描边 shader 是加色混合（Blend SrcAlpha One），再叠 URP 的 Bloom，
+        // 钥匙这种几厘米的小物件会被糊成一团青光，完全看不出是钥匙。先去掉描边。
         var outline = key.GetComponent<ProximityOutline>();
-        if (!outline) outline = key.gameObject.AddComponent<ProximityOutline>();
-        outline.revealDistance = 1.8f;
-        outline.outlineWidth = .0022f;
-        outline.outlineColor = new Color(.85f, .68f, .30f, .45f);
+        if (outline) Object.Destroy(outline);
+
+        // 钥匙材质如果是 Unreal 导过来的自发光，也会在暗处烧成一团。把自发光关掉。
+        foreach (var r in key.GetComponentsInChildren<Renderer>(true))
+        {
+            foreach (var mat in r.materials)
+            {
+                if (!mat) continue;
+                if (mat.HasProperty("_EmissionColor")) mat.SetColor("_EmissionColor", Color.black);
+                if (mat.HasProperty("_EmissionMap")) mat.SetTexture("_EmissionMap", null);
+                mat.DisableKeyword("_EMISSION");
+                mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+            }
+        }
+
+        // 也不要在钥匙边上点灯：点光按平方反比衰减，放在 14cm 处几乎必然过曝成白球。
+        // 只留一盏极弱的小灯（0.06）当“这里有东西”的暗示，形状还是靠场景光。
+        if (!key.Find("钥匙微光"))
+        {
+            var lampHost = new GameObject("钥匙微光");
+            lampHost.transform.SetParent(key, false);
+            lampHost.transform.localPosition = Vector3.up * .30f;
+            var lamp = lampHost.AddComponent<Light>();
+            lamp.type = LightType.Point;
+            lamp.color = new Color(1f, .9f, .7f);
+            lamp.range = .38f;
+            lamp.intensity = .06f;
+            lamp.shadows = LightShadows.None;
+        }
 
         Debug.Log("[二楼二号房间] 钥匙已可拾取，位置 " + key.position.ToString("F3"), key);
     }

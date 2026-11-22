@@ -31,7 +31,9 @@ public sealed class PlayerInventory : MonoBehaviour
         if(IsOpen||Cursor.lockState!=CursorLockMode.Locked)return;
         var cam=Camera.main;if(!cam)return;
         float nearest=reach;
-        foreach(var hit in Physics.RaycastAll(cam.transform.position,cam.transform.forward,reach,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore))
+        // 用带半径的球扫而不是细射线：信封碎片、相册这类又薄又小的东西，
+        // 细射线很容易从边上擦过去，玩家明明瞄准了却按不出提示。
+        foreach(var hit in Physics.SphereCastAll(cam.transform.position,.085f,cam.transform.forward,reach,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore))
         {
             if(hit.collider.transform.IsChildOf(transform)||hit.distance>=nearest)continue;
             var door=hit.collider.GetComponentInParent<InteractiveDoor>();

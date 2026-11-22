@@ -28,7 +28,11 @@ public sealed class Room2Tidy : MonoBehaviour
     readonly List<Item> items = new List<Item>();
     Transform smallDoor;
     Vector3 smallDoorCheck;
-    bool begun, finished, entered;
+    bool begun, finished, entered, fragmentTaken;
+
+    // 小房间里那张纸（信封碎片④）与它的指引光
+    Transform roomFragment;
+    Light fragmentGlow;
 
     public bool Solved => finished;
 
@@ -64,7 +68,7 @@ public sealed class Room2Tidy : MonoBehaviour
         if (photo)
         {
             Add("photo", "相册", photo.transform, new Vector3(-16.5580f, 4.3722f, -104.7070f), Quaternion.identity, false);
-            PreparePickup(photo.transform);
+            PreparePickup(photo.transform, .22f);
         }
 
         // ③ 笔记本电脑
@@ -87,7 +91,31 @@ public sealed class Room2Tidy : MonoBehaviour
         foreach (var item in items)
             if (!item.pushOnly) CreateSpot(item);
 
-        Debug.Log("[整理谜题] 已装配 " + items.Count + " 件待归位物品。", this);
+        // 小房间书桌上那张纸：整理完成后指引玩家来捡
+        roomFragment = DrawerFragmentReveal.FindDeep("对象005");
+        PrepareRoomFragment();
+
+        Debug.Log("[整理谜题] 已装配 " + items.Count + " 件待归位物品；小房间碎片=" + (roomFragment ? roomFragment.name : "无"), this);
+    }
+
+    /// <summary>把小房间里那张纸变成可拾取的信封碎片④。</summary>
+    void PrepareRoomFragment()
+    {
+        if (!roomFragment) { Debug.LogWarning("[整理谜题] 没找到小房间里的信封碎片（对象005）。"); return; }
+
+        var existing = roomFragment.GetComponent<PickupItem>();
+        if (existing && !string.IsNullOrEmpty(existing.storyId)) return;   // 已被别的谜题占用
+
+        var pick = existing ? existing : roomFragment.gameObject.AddComponent<PickupItem>();
+        pick.displayName = "信封碎片④";
+        pick.storyId = "letter_fragment_4";
+        pick.itemType = "信封碎片";
+        pick.description = "在小房间桌面上找到的一页信，边角被摩挲得有点毛。";
+
+        if (!roomFragment.GetComponent<EnvelopeFragment>())
+            roomFragment.gameObject.AddComponent<EnvelopeFragment>();
+
+        EnsureCollider(roomFragment, .18f, .06f);
     }
 
     void Add(string id, string label, Transform target, Vector3 position, Quaternion rotation, bool pushOnly)
@@ -113,7 +141,7 @@ public sealed class Room2Tidy : MonoBehaviour
 
     // ---------------- 物品准备 ----------------
 
-    void PreparePickup(Transform t)
+    void PreparePickup(Transform t, float minXZ = .05f)
     {
         var pickup = t.GetComponent<PickupItem>();
         if (!pickup) pickup = t.gameObject.AddComponent<PickupItem>();
@@ -123,7 +151,13 @@ public sealed class Room2Tidy : MonoBehaviour
         pickup.itemType = "房间摆设";
         pickup.description = "二楼二号房间里需要归位的东西。";
 
-        EnsureCollider(t);
+        EnsureCollider(t, minXZ, minXZ > .1f ? minXZ * .5f : .05f);
+
+        var check = t.GetComponent<BoxCollider>();
+        Vector3 sc = t.lossyScale;
+        Debug.Log("[整理] " + t.name + " storyId=" + pickup.storyId
+            + " BoxCollider=" + (check ? "有 world=" + (check.size.x * Mathf.Abs(sc.x)).ToString("F2") : "无")
+            + " scale=" + sc.ToString("F3"));
     }
 
     void PreparePush(Transform t)
@@ -136,20 +170,24 @@ public sealed class Room2Tidy : MonoBehaviour
         EnsureCollider(t);
     }
 
-    static void EnsureCollider(Transform t)
+    static void EnsureCollider(Transform t, float minXZ = .05f, float minY = .05f)
     {
-        if (t.GetComponent<Collider>() || t.GetComponentInChildren<Collider>()) return;
+        // 一定要挂在 PickupItem 所在的那个节点上：之前只依赖子网格自带的 MeshCollider，
+        // 相册/茶杯这种又薄又小的东西射线一擦就过去了，玩家瞄着也捡不起来。
         var renderers = t.GetComponentsInChildren<Renderer>();
         if (renderers.Length == 0) return;
         Bounds bounds = renderers[0].bounds;
         for (int i = 1; i < renderers.Length; i++) bounds.Encapsulate(renderers[i].bounds);
-        var box = t.gameObject.AddComponent<BoxCollider>();
+
+        var box = t.GetComponent<BoxCollider>();
+        if (!box) box = t.gameObject.AddComponent<BoxCollider>();
         Vector3 scale = t.lossyScale;
         box.center = t.InverseTransformPoint(bounds.center);
         box.size = new Vector3(
-            Mathf.Max(.05f, bounds.size.x) / Mathf.Max(.0001f, Mathf.Abs(scale.x)),
-            Mathf.Max(.05f, bounds.size.y) / Mathf.Max(.0001f, Mathf.Abs(scale.y)),
-            Mathf.Max(.05f, bounds.size.z) / Mathf.Max(.0001f, Mathf.Abs(scale.z)));
+            Mathf.Max(minXZ, bounds.size.x) / Mathf.Max(.0001f, Mathf.Abs(scale.x)),
+            Mathf.Max(minY, bounds.size.y) / Mathf.Max(.0001f, Mathf.Abs(scale.y)),
+            Mathf.Max(minXZ, bounds.size.z) / Mathf.Max(.0001f, Mathf.Abs(scale.z)));
+        box.isTrigger = false;
     }
 
     Item CurrentOf(Transform t)
@@ -261,22 +299,57 @@ public sealed class Room2Tidy : MonoBehaviour
             }
         }
 
-        // 走进小房间
-        if (finished && !entered && smallDoor)
+        // 走进小房间 → 桌上的碎片开始发亮。
+        // 不用“门的位置 + 方向”判断（门的 pivot 在门框顶部，方向很容易搞反），
+        // 直接看玩家离碎片够不够近，语义上也等价于“进到小房间了”。
+        if (finished && !entered && roomFragment)
         {
             var player = FindObjectOfType<PlayerController>();
-            if (player)
+            if (player && Vector3.Distance(player.transform.position, roomFragment.position) < 3.2f)
             {
-                Vector3 p = player.transform.position;
-                if (p.y > 3.0f && p.y < 5.0f && p.z < smallDoorCheck.z + .55f
-                    && Mathf.Abs(p.x - smallDoorCheck.x) < 1.6f)
-                {
-                    entered = true;
-                    StoryProgress.Instance?.EnqueueCenter("内心独白",
-                        "突然想去一楼客厅那里的沙发坐一会了，小时候最喜欢去沙发那个卧着看电视了。");
-                }
+                entered = true;
+                StartFragmentGlow();
             }
         }
+
+        // 碎片被捡走 → 想起一楼的沙发
+        if (entered && !fragmentTaken)
+        {
+            bool picked = !roomFragment || !roomFragment.gameObject.activeInHierarchy;
+            if (picked)
+            {
+                fragmentTaken = true;
+                StopFragmentGlow();
+                StoryProgress.Instance?.EnqueueCenter("内心独白",
+                    "突然想去一楼客厅那里的沙发坐一会了，小时候最喜欢去沙发那个卧着看电视了。");
+            }
+        }
+
+        // 呼吸式的微亮，比常亮更抓眼
+        if (fragmentGlow)
+            fragmentGlow.intensity = .85f + Mathf.Sin(Time.time * 2.4f) * .35f;
+    }
+
+    void StartFragmentGlow()
+    {
+        if (fragmentGlow || !roomFragment) return;
+        var host = new GameObject("碎片指引光");
+        host.transform.SetParent(roomFragment, false);
+        host.transform.localPosition = Vector3.up * .16f;
+        fragmentGlow = host.AddComponent<Light>();
+        fragmentGlow.type = LightType.Point;
+        fragmentGlow.color = new Color(1f, .92f, .64f);
+        fragmentGlow.range = 1.5f;
+        fragmentGlow.intensity = .9f;
+        fragmentGlow.shadows = LightShadows.None;
+        Debug.Log("[整理谜题] 碎片开始发亮：" + roomFragment.name);
+    }
+
+    void StopFragmentGlow()
+    {
+        if (!fragmentGlow) return;
+        Destroy(fragmentGlow.gameObject);
+        fragmentGlow = null;
     }
 
     /// <summary>玩家在放置点按 E。</summary>
@@ -316,7 +389,6 @@ public sealed class Room2Tidy : MonoBehaviour
     {
         if (finished) return;
         finished = true;
-        StoryProgress.Instance?.EnqueueCenter("整理完成", "房间收拾干净了，小房间的门开了。");
 
         if (smallDoor)
         {
@@ -329,7 +401,9 @@ public sealed class Room2Tidy : MonoBehaviour
                 if (!door.IsOpen) door.Toggle(player ? player.transform.position : smallDoor.position + smallDoor.forward);
             }
         }
-        StoryProgress.Instance?.EnqueueCenter("小房间", "小房间的门开了，进去看看吧。");
+
+        StoryProgress.Instance?.EnqueueCenter("谜题四完成",
+            "恭喜通关谜题四的房间整理，信封碎片就在小房间中。");
     }
 
     // ---------------- 工具 ----------------

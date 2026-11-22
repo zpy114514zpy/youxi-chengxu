@@ -53,26 +53,52 @@ public sealed class DrawerFragmentReveal : MonoBehaviour
             yield break;
         }
 
-        // 这个抽屉现在由剧情控制，关掉手动开关，避免和自动滑动互相抢位置。
-        DisableManualToggle(drawer);
-        if (handle && handle != drawer) DisableManualToggle(handle);
+        // 统一交给 FurnitureOpenable 处理：它用“射线测通空 + 朝玩家”判定方向，
+        // 保证剧情打开和玩家手动按 E 走的是同一套逻辑，不会再横向滑出去。
+        var openable = drawer.GetComponent<FurnitureOpenable>();
+        if (!openable && handle) openable = handle.GetComponent<FurnitureOpenable>();
 
-        Vector3 closed = drawer.position;
-        Vector3 direction = ResolveOpenDirection(drawer);
-        Vector3 open = closed + direction * slideDistance;
-        Debug.Log("[抽屉] 拉开 " + PathOf(drawer) + "，方向 " + direction.ToString("F2") + "，距离 " + slideDistance.ToString("F2"), this);
-
-        float t = 0f;
-        while (t < slideDuration)
+        if (openable)
         {
-            t += Time.deltaTime;
-            float k = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t / Mathf.Max(.01f, slideDuration)));
+            DisableManualToggle(drawer);
+            openable.enabled = true;
+            openable.slide = true;
+            openable.speed = .9f;                     // 慢慢拉开，给玩家反应时间
+            openable.Open();
+
+            float guard = 0f;
+            while (guard < 4f && openable && openable.OpenAmount < .995f)
+            {
+                guard += Time.deltaTime;
+                yield return null;
+            }
             if (!drawer) yield break;
-            drawer.position = Vector3.Lerp(closed, open, k);
-            yield return null;
+            Debug.Log("[抽屉] 已按统一算法拉开 " + PathOf(drawer)
+                + "，方向 " + openable.OpeningDirection.ToString("F2"), this);
         }
-        if (!drawer) yield break;
-        drawer.position = open;
+        else
+        {
+            // 没有 FurnitureOpenable 时的老路径（保底）
+            DisableManualToggle(drawer);
+            if (handle && handle != drawer) DisableManualToggle(handle);
+
+            Vector3 closed = drawer.position;
+            Vector3 direction = ResolveOpenDirection(drawer);
+            Vector3 open = closed + direction * slideDistance;
+            Debug.Log("[抽屉] 拉开 " + PathOf(drawer) + "，方向 " + direction.ToString("F2"), this);
+
+            float t = 0f;
+            while (t < slideDuration)
+            {
+                t += Time.deltaTime;
+                float k = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t / Mathf.Max(.01f, slideDuration)));
+                if (!drawer) yield break;
+                drawer.position = Vector3.Lerp(closed, open, k);
+                yield return null;
+            }
+            if (!drawer) yield break;
+            drawer.position = open;
+        }
 
         PlaceFragment();
     }
@@ -80,7 +106,7 @@ public sealed class DrawerFragmentReveal : MonoBehaviour
     void PlaceFragment()
     {
         Bounds bounds = BoundsOf(drawer);
-        Vector3 target = new Vector3(bounds.center.x, bounds.min.y + .012f, bounds.center.z);
+        Vector3 target = new Vector3(bounds.center.x, bounds.min.y + .02f, bounds.center.z);
         // 纸片平放，只保留原有朝向。
         fragment.transform.SetPositionAndRotation(target, Quaternion.Euler(0f, fragment.transform.eulerAngles.y, 0f));
 
@@ -93,11 +119,33 @@ public sealed class DrawerFragmentReveal : MonoBehaviour
             fragment.transform.position += Vector3.up * (target.y - paper.min.y);
         }
 
+        // 纸片很薄，原来的碰撞盒贴着抽屉底，射线经常擦过去 —— 放大到至少 18cm 见方。
+        EnsurePickCollider(fragment.transform);
+
         fragmentOffset = fragment.transform.position - drawer.position;
         fragment.SetActive(true);
         placed = true;
         if (StoryProgress.Instance) StoryProgress.Instance.RecordClue("书桌抽屉被轻轻拉开，里面压着一张信封碎片。");
-        Debug.Log("[抽屉] 信封碎片已放入抽屉：世界坐标 " + fragment.transform.position.ToString("F3") + "，抽屉包围盒 " + bounds.size.ToString("F3") + " 底部 " + bounds.min.ToString("F3"), this);
+        Debug.Log("[抽屉] 信封碎片已放入抽屉：世界坐标 " + fragment.transform.position.ToString("F3"), this);
+    }
+
+    static void EnsurePickCollider(Transform t)
+    {
+        if (!t) return;
+        var box = t.GetComponent<BoxCollider>();
+        if (!box) box = t.gameObject.AddComponent<BoxCollider>();
+        var r = t.GetComponent<Renderer>();
+        if (!r) return;
+
+        Bounds b = r.bounds;
+        Vector3 s = t.lossyScale;
+        float minXZ = .18f, minY = .08f;
+        box.center = t.InverseTransformPoint(b.center);
+        box.size = new Vector3(
+            Mathf.Max(minXZ, b.size.x) / Mathf.Max(.0001f, Mathf.Abs(s.x)),
+            Mathf.Max(minY, b.size.y) / Mathf.Max(.0001f, Mathf.Abs(s.y)),
+            Mathf.Max(minXZ, b.size.z) / Mathf.Max(.0001f, Mathf.Abs(s.z)));
+        box.isTrigger = false;
     }
 
     // 抽屉还能被关回去时，碎片跟着一起动，不会浮在半空。
