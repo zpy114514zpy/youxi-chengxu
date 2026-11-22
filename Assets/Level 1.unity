@@ -167,6 +167,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 1
+  hingeOnRight: 0
   slideDirection: {x: -1, y: 0, z: 0}
   travel: 0.22
   openAngle: 75
@@ -302,6 +303,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 0
+  hingeOnRight: 0
   slideDirection: {x: 0, y: 0, z: 1}
   travel: 0.28
   openAngle: 75
@@ -671,6 +673,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 1
+  hingeOnRight: 0
   slideDirection: {x: 0.018282916, y: 0, z: -0.99983287}
   travel: 0.3194302
   openAngle: 75
@@ -1825,6 +1828,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 0
+  hingeOnRight: 0
   slideDirection: {x: 0, y: 0, z: 1}
   travel: 0.28
   openAngle: 75
@@ -2358,6 +2362,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 0
+  hingeOnRight: 0
   slideDirection: {x: 0, y: 0, z: 1}
   travel: 0.28
   openAngle: -75
@@ -2688,6 +2693,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 0
+  hingeOnRight: 0
   slideDirection: {x: 0, y: 0, z: 1}
   travel: 0.28
   openAngle: 75
@@ -2711,6 +2717,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 0
+  hingeOnRight: 0
   slideDirection: {x: 0, y: 0, z: 1}
   travel: 0.28
   openAngle: 75
@@ -3011,6 +3018,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 1
+  hingeOnRight: 0
   slideDirection: {x: -1, y: 0, z: 0}
   travel: 0.22
   openAngle: 75
@@ -3090,6 +3098,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 1
+  hingeOnRight: 0
   slideDirection: {x: -0.99157226, y: 0, z: -0.12955457}
   travel: 0.18
   openAngle: 75
@@ -4506,6 +4515,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 0
+  hingeOnRight: 0
   slideDirection: {x: 0, y: 0, z: 1}
   travel: 0.28
   openAngle: -75
@@ -5568,6 +5578,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 0
+  hingeOnRight: 0
   slideDirection: {x: 0, y: 0, z: 1}
   travel: 0.28
   openAngle: 75
@@ -5731,6 +5742,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 0
+  hingeOnRight: 0
   slideDirection: {x: 0, y: 0, z: 1}
   travel: 0.28
   openAngle: -75
@@ -5810,6 +5822,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 0
+  hingeOnRight: 0
   slideDirection: {x: 0, y: 0, z: 1}
   travel: 0.28
   openAngle: -75
@@ -5861,6 +5874,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 0
+  hingeOnRight: 0
   slideDirection: {x: 0, y: 0, z: 1}
   travel: 0.28
   openAngle: 75
@@ -6526,6 +6540,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 0
+  hingeOnRight: 0
   slideDirection: {x: 0, y: 0, z: 1}
   travel: 0.28
   openAngle: 75
@@ -6837,17 +6852,17 @@ PrefabInstance:
     - target: {fileID: -4084672777538192892, guid: 78df15cc76e96254eae7b7a3b4520e40,
         type: 3}
       propertyPath: m_LocalPosition.x
-      value: -5883.899
+      value: -5937
       objectReference: {fileID: 0}
     - target: {fileID: -4084672777538192892, guid: 78df15cc76e96254eae7b7a3b4520e40,
         type: 3}
       propertyPath: m_LocalPosition.y
-      value: 34.000046
+      value: 42
       objectReference: {fileID: 0}
     - target: {fileID: -4084672777538192892, guid: 78df15cc76e96254eae7b7a3b4520e40,
         type: 3}
       propertyPath: m_LocalPosition.z
-      value: 1069.9868
+      value: -1914
       objectReference: {fileID: 0}
     - target: {fileID: -4084672777538192892, guid: 78df15cc76e96254eae7b7a3b4520e40,
         type: 3}
@@ -7197,6 +7212,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 0
+  hingeOnRight: 0
   slideDirection: {x: 0, y: 0, z: 1}
   travel: 0.28
   openAngle: -75
@@ -7248,6 +7264,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 1
+  hingeOnRight: 0
   slideDirection: {x: 0.010201547, y: 0, z: -0.99994797}
   travel: 0.30507693
   openAngle: 75
@@ -7736,6 +7753,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 0
+  hingeOnRight: 0
   slideDirection: {x: 0, y: 0, z: 1}
   travel: 0.28
   openAngle: -75
@@ -9718,6 +9736,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 1
+  hingeOnRight: 0
   slideDirection: {x: -1, y: 0, z: 0}
   travel: 0.22
   openAngle: 75
@@ -10304,6 +10323,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 0
+  hingeOnRight: 0
   slideDirection: {x: 0, y: 0, z: 1}
   travel: 0.28
   openAngle: -75
@@ -10788,6 +10808,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 1
+  hingeOnRight: 0
   slideDirection: {x: -0.99157226, y: 0, z: -0.12955457}
   travel: 0.18
   openAngle: 75
@@ -11643,6 +11664,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 0
+  hingeOnRight: 0
   slideDirection: {x: 0, y: 0, z: 1}
   travel: 0.28
   openAngle: -75
@@ -12329,32 +12351,32 @@ PrefabInstance:
     - target: {fileID: -8679921383154817045, guid: 7754d52706e27814fb46decc026730b7,
         type: 3}
       propertyPath: m_LocalScale.x
-      value: 0.16914
+      value: 0.31207117
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 7754d52706e27814fb46decc026730b7,
         type: 3}
       propertyPath: m_LocalScale.y
-      value: 0.16914
+      value: 0.31207117
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 7754d52706e27814fb46decc026730b7,
         type: 3}
       propertyPath: m_LocalScale.z
-      value: 0.16914
+      value: 0.31207117
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 7754d52706e27814fb46decc026730b7,
         type: 3}
       propertyPath: m_LocalPosition.x
-      value: -19.5256
+      value: -19.417
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 7754d52706e27814fb46decc026730b7,
         type: 3}
       propertyPath: m_LocalPosition.y
-      value: 3.9217
+      value: 3.374
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 7754d52706e27814fb46decc026730b7,
         type: 3}
       propertyPath: m_LocalPosition.z
-      value: -96.2547
+      value: -97.345
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 7754d52706e27814fb46decc026730b7,
         type: 3}
@@ -12661,6 +12683,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 1
+  hingeOnRight: 0
   slideDirection: {x: -0.9994778, y: 0, z: -0.032311793}
   travel: 0.19510375
   openAngle: 75
@@ -13188,6 +13211,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 0
+  hingeOnRight: 0
   slideDirection: {x: 0, y: 0, z: 1}
   travel: 0.28
   openAngle: 75
@@ -14512,6 +14536,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 1
+  hingeOnRight: 0
   slideDirection: {x: -1, y: 0, z: 0}
   travel: 0.22
   openAngle: 75
@@ -48289,27 +48314,27 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1031340682, guid: dac1a000000009109922778704105942, type: 3}
       propertyPath: m_LocalScale.x
-      value: 1.3235
+      value: 0.52802354
       objectReference: {fileID: 0}
     - target: {fileID: 1031340682, guid: dac1a000000009109922778704105942, type: 3}
       propertyPath: m_LocalScale.y
-      value: 1.3235
+      value: 0.52802354
       objectReference: {fileID: 0}
     - target: {fileID: 1031340682, guid: dac1a000000009109922778704105942, type: 3}
       propertyPath: m_LocalScale.z
-      value: 1.3235
+      value: 0.52802354
       objectReference: {fileID: 0}
     - target: {fileID: 1031340682, guid: dac1a000000009109922778704105942, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -17.098
+      value: -18.01
       objectReference: {fileID: 0}
     - target: {fileID: 1031340682, guid: dac1a000000009109922778704105942, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 3.3796
+      value: 3.97
       objectReference: {fileID: 0}
     - target: {fileID: 1031340682, guid: dac1a000000009109922778704105942, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -93.323
+      value: -93.05
       objectReference: {fileID: 0}
     - target: {fileID: 1031340682, guid: dac1a000000009109922778704105942, type: 3}
       propertyPath: m_LocalRotation.w
@@ -1316056,7 +1316081,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1031695020, guid: dac1a000000009772603914676981237, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -92.887352
+      value: -92.885
       objectReference: {fileID: 0}
     - target: {fileID: 1031695020, guid: dac1a000000009772603914676981237, type: 3}
       propertyPath: m_LocalRotation.w
@@ -1316064,7 +1316089,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1031695020, guid: dac1a000000009772603914676981237, type: 3}
       propertyPath: m_LocalRotation.x
-      value: -0.000000
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: 1031695020, guid: dac1a000000009772603914676981237, type: 3}
       propertyPath: m_LocalRotation.y
@@ -1316072,7 +1316097,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1031695020, guid: dac1a000000009772603914676981237, type: 3}
       propertyPath: m_LocalRotation.z
-      value: -0.000000
+      value: -0
       objectReference: {fileID: 0}
     - target: {fileID: 1031695023, guid: dac1a000000009772603914676981237, type: 3}
       propertyPath: m_Enabled
@@ -1325290,6 +1325315,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 0
+  hingeOnRight: 0
   slideDirection: {x: 0, y: 0, z: 1}
   travel: 0.28
   openAngle: -75
@@ -1325453,6 +1325479,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 1
+  hingeOnRight: 0
   slideDirection: {x: -0.99157226, y: 0, z: -0.12955457}
   travel: 0.18
   openAngle: 75
@@ -1325502,6 +1325529,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 1
+  hingeOnRight: 0
   slideDirection: {x: -1, y: 0, z: 0}
   travel: 0.22
   openAngle: 75
@@ -1325553,6 +1325581,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 0
+  hingeOnRight: 0
   slideDirection: {x: 0, y: 0, z: 1}
   travel: 0.28
   openAngle: 75
@@ -1325860,6 +1325889,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 0
+  hingeOnRight: 0
   slideDirection: {x: 0, y: 0, z: 1}
   travel: 0.28
   openAngle: -75
@@ -1326600,6 +1326630,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 1
+  hingeOnRight: 0
   slideDirection: {x: 0.010201547, y: 0, z: -0.99994797}
   travel: 0.30516925
   openAngle: 75
@@ -1327416,6 +1327447,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 0
+  hingeOnRight: 0
   slideDirection: {x: 0, y: 0, z: 1}
   travel: 0.28
   openAngle: 75
@@ -1327781,6 +1327813,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 1
+  hingeOnRight: 0
   slideDirection: {x: 0.018282916, y: 0, z: -0.99983287}
   travel: 0.3194302
   openAngle: 75
@@ -1327804,6 +1327837,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 0
+  hingeOnRight: 0
   slideDirection: {x: 0, y: 0, z: 1}
   travel: 0.28
   openAngle: 75
@@ -1328485,6 +1328519,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 0
+  hingeOnRight: 0
   slideDirection: {x: 0, y: 0, z: 1}
   travel: 0.28
   openAngle: -75
@@ -1329345,6 +1329380,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 0
+  hingeOnRight: 0
   slideDirection: {x: 0, y: 0, z: 1}
   travel: 0.28
   openAngle: 75
@@ -1329939,6 +1329975,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 1
+  hingeOnRight: 0
   slideDirection: {x: -1, y: 0, z: 0}
   travel: 0.22
   openAngle: 75
@@ -1331155,22 +1331192,22 @@ PrefabInstance:
     - target: {fileID: -8679921383154817045, guid: 02fec27f14cde3347b2ac61767d7bcc1,
         type: 3}
       propertyPath: m_LocalScale.x
-      value: 0.40868965
+      value: 0.30955225
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 02fec27f14cde3347b2ac61767d7bcc1,
         type: 3}
       propertyPath: m_LocalScale.y
-      value: 0.40868965
+      value: 0.30955225
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 02fec27f14cde3347b2ac61767d7bcc1,
         type: 3}
       propertyPath: m_LocalScale.z
-      value: 0.40868965
+      value: 0.30955225
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 02fec27f14cde3347b2ac61767d7bcc1,
         type: 3}
       propertyPath: m_LocalPosition.x
-      value: -19.2625
+      value: -19.303
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 02fec27f14cde3347b2ac61767d7bcc1,
         type: 3}
@@ -1331185,37 +1331222,37 @@ PrefabInstance:
     - target: {fileID: -8679921383154817045, guid: 02fec27f14cde3347b2ac61767d7bcc1,
         type: 3}
       propertyPath: m_LocalRotation.w
-      value: 0.7522288
+      value: 0.7625859
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 02fec27f14cde3347b2ac61767d7bcc1,
         type: 3}
       propertyPath: m_LocalRotation.x
-      value: -0.24549825
+      value: -0.12947063
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 02fec27f14cde3347b2ac61767d7bcc1,
         type: 3}
       propertyPath: m_LocalRotation.y
-      value: -0.5586905
+      value: -0.6207447
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 02fec27f14cde3347b2ac61767d7bcc1,
         type: 3}
       propertyPath: m_LocalRotation.z
-      value: -0.24849036
+      value: -0.12796938
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 02fec27f14cde3347b2ac61767d7bcc1,
         type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
-      value: -139.68399
+      value: -159.125
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 02fec27f14cde3347b2ac61767d7bcc1,
         type: 3}
       propertyPath: m_LocalEulerAnglesHint.y
-      value: 109.553
+      value: 102.098
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 02fec27f14cde3347b2ac61767d7bcc1,
         type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
-      value: -187.5
+      value: -182.112
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 02fec27f14cde3347b2ac61767d7bcc1,
         type: 3}
@@ -1331286,6 +1331323,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 0
+  hingeOnRight: 0
   slideDirection: {x: 0, y: 0, z: 1}
   travel: 0.28
   openAngle: 75
@@ -1331686,6 +1331724,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 0
+  hingeOnRight: 0
   slideDirection: {x: 0, y: 0, z: 1}
   travel: 0.28
   openAngle: 75
@@ -1332059,6 +1332098,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 1
+  hingeOnRight: 0
   slideDirection: {x: -0, y: -0, z: 1}
   travel: 0.28340212
   openAngle: 75
@@ -1332138,6 +1332178,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 1
+  hingeOnRight: 0
   slideDirection: {x: 1, y: 0, z: 0}
   travel: 0.3381524
   openAngle: 75
@@ -1332189,6 +1332230,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 1
+  hingeOnRight: 0
   slideDirection: {x: -0, y: -0, z: 1}
   travel: 0.28377348
   openAngle: 75
@@ -1332296,6 +1332338,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 1
+  hingeOnRight: 0
   slideDirection: {x: -0.9994778, y: 0, z: -0.032311793}
   travel: 0.19510375
   openAngle: 75
@@ -1332529,6 +1332572,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 1
+  hingeOnRight: 0
   slideDirection: {x: -0.9994778, y: 0, z: -0.032311793}
   travel: 0.19510375
   openAngle: 75
@@ -1333155,6 +1333199,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 1
+  hingeOnRight: 0
   slideDirection: {x: -0.9994778, y: 0, z: -0.032311793}
   travel: 0.19510375
   openAngle: 75
@@ -1333346,6 +1333391,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 0
+  hingeOnRight: 0
   slideDirection: {x: 0, y: 0, z: 1}
   travel: 0.28
   openAngle: -75
@@ -1333800,6 +1333846,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 1
+  hingeOnRight: 0
   slideDirection: {x: 1, y: 0, z: 0}
   travel: 0.33816034
   openAngle: 75
@@ -1335240,6 +1335287,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 1
+  hingeOnRight: 0
   slideDirection: {x: -1, y: 0, z: 0}
   travel: 0.26
   openAngle: 75
@@ -1335962,6 +1336010,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 0
+  hingeOnRight: 0
   slideDirection: {x: 0, y: 0, z: 1}
   travel: 0.28
   openAngle: 75
@@ -1336802,6 +1336851,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 1
+  hingeOnRight: 0
   slideDirection: {x: -1, y: 0, z: 0}
   travel: 0.26
   openAngle: 75
@@ -1336941,6 +1336991,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 0
+  hingeOnRight: 0
   slideDirection: {x: 0, y: 0, z: 1}
   travel: 0.28
   openAngle: -75
@@ -1337020,6 +1337071,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 0
+  hingeOnRight: 0
   slideDirection: {x: 0, y: 0, z: 1}
   travel: 0.28
   openAngle: 75
@@ -1338561,6 +1338613,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 0
+  hingeOnRight: 0
   slideDirection: {x: 0, y: 0, z: 1}
   travel: 0.28
   openAngle: -75
@@ -1339228,6 +1339281,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 1
+  hingeOnRight: 0
   slideDirection: {x: -0.99157226, y: 0, z: -0.12955457}
   travel: 0.18
   openAngle: 75
@@ -1339501,6 +1339555,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slide: 1
+  hingeOnRight: 0
   slideDirection: {x: -1, y: 0, z: 0}
   travel: 0.26
   openAngle: 75

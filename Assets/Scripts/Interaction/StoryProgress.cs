@@ -21,12 +21,21 @@ public sealed class StoryProgress : MonoBehaviour
     readonly Queue<Page> pages = new Queue<Page>();
     readonly Queue<Page> readingPages = new Queue<Page>();
     Page? current, reading;
-    Texture2D opening, detail, guide;
+    // 左下角“上一步”用的历史：走过的每一页都记下来，回看时只切换显示，不动上面两条队列，
+    // 所以回看多少步都不会把后面的提示弄丢，按空格还能原路走回原处再继续。
+    readonly List<Page> backSteps = new List<Page>();
+    readonly Stack<Page> forwardSteps = new Stack<Page>();
+    Page? reviewing;
+    bool pendingBack;
+    Texture2D opening, detail, guide, pillOn, pillHover, pillOff;
     Font font;
-    bool lampIntroShown;
+    bool lampIntroShown, cursorReleased;
+    PlayerInventory inventory;
     public bool IsReading => reading.HasValue || current.HasValue && current.Value.modal;
     // 当前是否还有任意一页剧情/提示正在屏幕上（用来判断玩家是否已经把 UI 跳过）。
-    public bool IsShowingPage => current.HasValue || reading.HasValue;
+    public bool IsShowingPage => current.HasValue || reading.HasValue || reviewing.HasValue;
+    // 屏幕正在显示的那一页：回看时是历史页，否则是正常推进到的那一页。
+    Page? DisplayedPage => reviewing.HasValue ? reviewing : (reading.HasValue ? reading : current);
     // 屏幕上或队列里还有页面没播完：新的提示要等这些播完再弹，避免两条 UI 挤在一起。
     public bool IsBusy => current.HasValue || reading.HasValue || pages.Count>0 || readingPages.Count>0;
     public bool HasFirstFragment => fragments.Contains("信封碎片①");
@@ -40,6 +49,7 @@ public sealed class StoryProgress : MonoBehaviour
         guide=Resources.Load<Texture2D>("StoryUI/guide-clean");
         LoadList("child_story_clues",clues);
         LoadList("child_story_fragments",fragments);
+        EnsurePill();
     }
 
     void Start()
@@ -60,6 +70,7 @@ public sealed class StoryProgress : MonoBehaviour
 
     public void Read(string title,string body,bool record=true)
     {
+        ClearReview();                        // 有新内容要看，先退出回看状态
         readingPages.Clear();
         foreach(var part in Split(body,64)) readingPages.Enqueue(new Page(title,part,detail,true,false));
         reading=readingPages.Count>0?readingPages.Dequeue():(Page?)null;
@@ -75,8 +86,12 @@ public sealed class StoryProgress : MonoBehaviour
         }
         if(name=="信封碎片①")
         {
+            // 顺序：先读「碎片一」这一页，玩家按空格关掉之后，才把“去一号门”的目标排到后面。
+            ClearReview();
             readingPages.Clear();
-            reading=new Page("关卡一完成","恭喜通过关卡一：卧室书桌谜题",opening,true,false);
+            reading=new Page("碎片一",
+                "“以后我一定会好好爱护我的玩偶的！”\n\n—— 小时候的她，写在信封碎片上",
+                detail,true,false);
             Enqueue("新的目标","请前往二楼一号房间1号门，完成第二个解密任务。");
         }
         else if(name=="信封碎片②")
@@ -89,10 +104,29 @@ public sealed class StoryProgress : MonoBehaviour
         }
     }
 
+    // 已经提示过的内容（标题+正文）。同一条提示只弹一次，玩家反复按 E、来回走都不会刷屏。
+    readonly HashSet<string> shownHints=new HashSet<string>();
+
     public void Enqueue(string message) => Enqueue("提示",message);
-    public void Enqueue(string title,string message) => AddPages(title,message,guide,false);
-    /// <summary>屏幕正中的提示（不挡操作，空格继续）。</summary>
-    public void EnqueueCenter(string title,string message) => AddPages(title,message,guide,false,true);
+    /// <summary>右下角提示面板。同一句提示整局只出现一次。</summary>
+    public void Enqueue(string title,string message)
+    {
+        if(!MarkHint(title,message))return;
+        AddPages(title,message,guide,false);
+    }
+    /// <summary>屏幕正中的提示（不挡操作，空格继续）。同一句提示整局只出现一次。</summary>
+    public void EnqueueCenter(string title,string message)
+    {
+        if(!MarkHint(title,message))return;
+        AddPages(title,message,guide,false,true);
+    }
+
+    bool MarkHint(string title,string message)
+    {
+        var shown=DisplayedPage;
+        if(shown.HasValue && shown.Value.title==title && shown.Value.body==message)return false;  // 同一页正在屏幕上
+        return shownHints.Add((title??"")+"|"+(message??""));                                     // 说过的不再说
+    }
 
     /// <summary>第二个任务（密码箱）完成后的收尾。</summary>
     public void OnSecondTaskCompleted()
@@ -119,12 +153,13 @@ public sealed class StoryProgress : MonoBehaviour
         pages.Clear();
         current=null;
         AddPages("第一关《卧室书桌谜题》","恭喜通过关卡一：卧室书桌谜题",opening,true);
-        AddPages("信封碎片","书桌抽屉里出现了信封碎片，找到并拾取它。",opening,true);
-        AddPages("下一步","请前往二楼一号房间1号门，继续寻找线索。",opening,true);
+        AddPages("书桌抽屉","四个玩偶都回到了床上。书桌中间那个抽屉“咔哒”响了一声。",opening,true);
+        // 去一号门的目标不在这里给：要先等玩家捡到碎片、读完「碎片一」那一页（见 AddFragment）。
     }
 
     void AddPages(string title,string body,Texture2D texture,bool modal,bool center=false)
     {
+        ClearReview();                        // 新提示来了就直接显示，不要被回看页挡住
         foreach(var part in Split(body,64))pages.Enqueue(new Page(title,part,texture,modal,center));
         if(!current.HasValue && pages.Count>0)current=pages.Dequeue();
     }
@@ -155,18 +190,81 @@ public sealed class StoryProgress : MonoBehaviour
 
     void Update()
     {
+        UpdateCursor();                       // 提示页在屏幕上时放开鼠标，方便点“上一步”
+        if(pendingBack){pendingBack=false;GoBack();}
         if(UiInputBlocker.Active)return;      // 密码键盘打开时不推进剧情
-        if(!Input.GetKeyDown(KeyCode.Space))return;
+        if(Input.GetKeyDown(KeyCode.Space))Advance();
+    }
+
+    /// <summary>往前推进一页：回看中按空格先沿原路走回原处，走回原处后恢复正常推进。</summary>
+    void Advance()
+    {
+        if(reviewing.HasValue)
+        {
+            Page leaving=reviewing.Value;
+            reviewing=null;
+            PushBack(leaving);                // 回看往前走，这一页又变成“上一步”
+            if(forwardSteps.Count>0)
+            {
+                Page next=forwardSteps.Pop();
+                if(forwardSteps.Count>0)reviewing=next;   // 还没走回原处，继续显示历史页
+            }
+            return;
+        }
+        if(reading.HasValue)PushBack(reading.Value);
+        else if(current.HasValue)PushBack(current.Value);
         if(reading.HasValue)
         { reading=readingPages.Count>0?readingPages.Dequeue():(Page?)null;return; }
         if(current.HasValue)current=pages.Count>0?pages.Dequeue():(Page?)null;
     }
 
+    /// <summary>左下角“上一步”：回看上一页提示，可以连点继续往前翻。</summary>
+    void GoBack()
+    {
+        if(backSteps.Count==0)return;
+        if(DisplayedPage.HasValue)forwardSteps.Push(DisplayedPage.Value);
+        reviewing=backSteps[backSteps.Count-1];
+        backSteps.RemoveAt(backSteps.Count-1);
+    }
+
+    void PushBack(Page page)
+    {
+        backSteps.Add(page);
+        while(backSteps.Count>40)backSteps.RemoveAt(0);   // 只留最近 40 页，别越攒越多
+    }
+
+    /// <summary>有新提示要显示时退出回看，但已经走过的历史仍然保留，“上一步”照样能用。</summary>
+    void ClearReview()
+    {
+        reviewing=null;
+        forwardSteps.Clear();
+    }
+
+    /// <summary>
+    /// 提示页显示时把鼠标放开，玩家才能点左下角的“上一步”；
+    /// 提示页收掉后重新锁回去（如果背包、密码键盘这些界面还开着，就不抢）。
+    /// </summary>
+    void UpdateCursor()
+    {
+        if(IsShowingPage)
+        {
+            if(Cursor.lockState==CursorLockMode.Locked)
+            { Cursor.lockState=CursorLockMode.None;Cursor.visible=true;cursorReleased=true; }
+            return;
+        }
+        if(!cursorReleased)return;
+        cursorReleased=false;
+        if(!inventory)inventory=FindObjectOfType<PlayerInventory>();
+        if(UiInputBlocker.Active||inventory&&inventory.IsOpen)return;
+        Cursor.lockState=CursorLockMode.Locked;
+        Cursor.visible=false;
+    }
+
     void OnGUI()
     {
-        Page? page=reading.HasValue?reading:current;
-        if(!page.HasValue)return;
-        var p=page.Value;
+        var shown=DisplayedPage;
+        if(!shown.HasValue)return;
+        var p=shown.Value;
         float width=Mathf.Min(Screen.width*.88f,1100f);
         float height=Mathf.Min(Screen.height*(p.texture==opening?.5f:.42f),width*(p.texture==opening?.33f:.27f));
         bool isGuide=p.texture==guide;
@@ -186,7 +284,74 @@ public sealed class StoryProgress : MonoBehaviour
         float bodyH  = isGuide ? .30f : .40f;
         GUI.Label(new Rect(rect.x+inset,rect.y+height*titleY,width-2*inset,height*titleH),p.title,Style(Mathf.RoundToInt(26*scale),TextAnchor.MiddleCenter));
         GUI.Label(new Rect(rect.x+inset,rect.y+height*bodyY,width-2*inset,height*bodyH),p.body,Style(Mathf.RoundToInt(23*scale),TextAnchor.MiddleCenter));
-        GUI.Label(new Rect(rect.x+inset,rect.y+height*.77f,width-2*inset-12f,height*.12f),"空格继续",Style(Mathf.RoundToInt(19*scale),TextAnchor.MiddleRight));
+        // 底部一行：左下角“上一步”（可点击回看），右下角“空格继续”，左右对称。
+        int hintSize=Mathf.RoundToInt(19*scale);
+        float rowY=rect.y+height*.77f, rowH=height*.12f, rowW=width-2*inset-12f;
+        GUI.Label(new Rect(rect.x+inset,rowY,rowW,rowH),"空格继续",Style(hintSize,TextAnchor.MiddleRight));
+        float pillH=Mathf.Clamp(rowH*.9f,32f,46f);
+        float pillW=Mathf.Min(rowW*.42f,170f*scale);
+        var backRect=new Rect(rect.x+inset,rowY+(rowH-pillH)*.5f,pillW,pillH);
+        if(BackButton(backRect,hintSize,backSteps.Count>0))pendingBack=true;
+    }
+
+    /// <summary>“上一步”按钮：没有历史时是灰的、点不动；有历史时可点，悬停/按下会变色。</summary>
+    bool BackButton(Rect rect,int size,bool enabled)
+    {
+        EnsurePill();
+        var style=new GUIStyle(GUI.skin.label){
+            font=font,fontSize=size,alignment=TextAnchor.MiddleCenter,wordWrap=false,
+            border=new RectOffset(PillBorder,PillBorder,PillBorder,PillBorder),
+            padding=new RectOffset(0,0,0,0),margin=new RectOffset(0,0,0,0)};
+        if(!enabled)
+        {
+            style.normal.background=pillOff;
+            style.normal.textColor=new Color(1f,1f,1f,.34f);
+            GUI.Label(rect,"←  上一步",style);
+            return false;
+        }
+        style.normal.background=pillOn;
+        style.hover.background=pillHover;
+        style.active.background=pillHover;
+        style.onNormal.background=pillOn;
+        style.onHover.background=pillHover;
+        style.onActive.background=pillHover;
+        style.normal.textColor=new Color(1f,1f,1f,.94f);
+        style.hover.textColor=new Color(1f,.9f,.55f,1f);
+        style.active.textColor=new Color(1f,.82f,.35f,1f);
+        style.onNormal.textColor=style.normal.textColor;
+        style.onHover.textColor=style.hover.textColor;
+        style.onActive.textColor=style.active.textColor;
+        return GUI.Button(rect,"←  上一步",style);
+    }
+
+    // 圆角药丸底图：横向拉伸靠 9 宫格边框，所以只用一张 64×64 的小图，不会把圆角拉糊。
+    const int PillBorder=14;
+    void EnsurePill()
+    {
+        if(pillOn)return;
+        pillOn=PillTexture(.13f);
+        pillHover=PillTexture(.26f);
+        pillOff=PillTexture(.05f);
+    }
+
+    static Texture2D PillTexture(float alpha)
+    {
+        const int n=64,r=14;
+        var tex=new Texture2D(n,n,TextureFormat.RGBA32,false)
+        { hideFlags=HideFlags.HideAndDontSave,filterMode=FilterMode.Bilinear,wrapMode=TextureWrapMode.Clamp };
+        var pixels=new Color32[n*n];
+        for(int y=0;y<n;y++)
+            for(int x=0;x<n;x++)
+            {
+                float qx=Mathf.Abs(x+.5f-n*.5f)-(n*.5f-r), qy=Mathf.Abs(y+.5f-n*.5f)-(n*.5f-r);
+                float d=Mathf.Sqrt(Mathf.Max(qx,0f)*Mathf.Max(qx,0f)+Mathf.Max(qy,0f)*Mathf.Max(qy,0f))
+                    +Mathf.Min(Mathf.Max(qx,qy),0f)-r;
+                float cover=Mathf.Clamp01(.5f-d);        // 边缘一个像素做抗锯齿
+                pixels[y*n+x]=new Color32(255,255,255,(byte)Mathf.RoundToInt(cover*alpha*255f));
+            }
+        tex.SetPixels32(pixels);
+        tex.Apply();
+        return tex;
     }
 
     /// <summary>
@@ -204,5 +369,12 @@ public sealed class StoryProgress : MonoBehaviour
 
     GUIStyle Style(int size,TextAnchor align)
     { return new GUIStyle(GUI.skin.label){font=font,fontSize=size,alignment=align,wordWrap=true,normal={textColor=Color.white}}; }
-    void OnDestroy(){if(Instance==this)Instance=null;if(font)Destroy(font);}
+    void OnDestroy()
+    {
+        if(Instance==this)Instance=null;
+        if(font)Destroy(font);
+        if(pillOn)Destroy(pillOn);
+        if(pillHover)Destroy(pillHover);
+        if(pillOff)Destroy(pillOff);
+    }
 }

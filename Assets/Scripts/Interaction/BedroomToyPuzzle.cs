@@ -5,6 +5,9 @@ public sealed class BedroomToyPuzzle:SequencePlacementPuzzle
     public GameObject fragmentObject;
     readonly HashSet<int> placed = new HashSet<int>();
     bool solved;
+
+    /// <summary>四个玩偶是不是都归位了。书桌抽屉的剧情锁、房门的剧情锁都要看它。</summary>
+    public bool Solved => solved;
     void Awake()
     {
         var letterModel=GameObject.Find("1 (1)");
@@ -23,8 +26,11 @@ public sealed class BedroomToyPuzzle:SequencePlacementPuzzle
         pickup.displayName="信封碎片①";
         pickup.storyId="letter_fragment_1";
         pickup.itemType="信封碎片";
-        pickup.description="童年写给未来的信：长大以后我要一直开心。";
-        if(!fragmentObject.GetComponent<EnvelopeFragment>())fragmentObject.AddComponent<EnvelopeFragment>();
+        pickup.description="碎片一：以后我一定会好好爱护我的玩偶的！";
+        var envelope=fragmentObject.GetComponent<EnvelopeFragment>();
+        if(!envelope)envelope=fragmentObject.AddComponent<EnvelopeFragment>();
+        envelope.fragmentName="信封碎片①";
+        envelope.text="以后我一定会好好爱护我的玩偶的！";
         if(!fragmentObject.GetComponent<Collider>())
         {
             // 模型节点带缩放（书桌实例是 88.8 倍），碰撞体尺寸要按世界尺寸换算回局部空间。
@@ -53,6 +59,9 @@ public sealed class BedroomToyPuzzle:SequencePlacementPuzzle
             }
         }
         fragmentObject.SetActive(false);
+        // 谜题没解开之前，书桌中间的抽屉拉不开（左右两侧照常能开），
+        // 叠在这里配一次，免得玩家提前把中间的抽屉翻个遍。
+        if(!GetComponent<DeskDrawerGate>())gameObject.AddComponent<DeskDrawerGate>();
     }
     public override bool CanPlace(int order) => !solved && !placed.Contains(order);
     public override void OnPlaced(int order)

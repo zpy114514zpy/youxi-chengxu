@@ -61,7 +61,9 @@ public sealed class PlayerInventory : MonoBehaviour
                 target=door;
                 var gate=door.GetComponent<DoorLock>();
                 bool exitDoor=door.GetComponentInParent<ExitBoundary>();
-                prompt=exitDoor?"E 查看门外白雾":(gate&&gate.LockedReason(this)!=""?gate.LockedPrompt:"E 开门 / 关门");
+                // 第一关没做完之前，除了大门以外的房门都不给开，只能“查看”。
+                if(RoomDoorGate.Blocks(door))prompt=RoomDoorGate.Prompt;
+                else prompt=exitDoor?"E 查看门外白雾":(gate&&gate.LockedReason(this)!=""?gate.LockedPrompt:"E 开门 / 关门");
             }
             else if(furniture){target=furniture;prompt=furniture.Prompt;}
             else if(item){target=item;prompt="E 拾取 "+item.displayName;}
@@ -81,7 +83,8 @@ public sealed class PlayerInventory : MonoBehaviour
             else if(target is InteractiveDoor door)
             {
                 var boundary=door.GetComponentInParent<ExitBoundary>();
-                if(boundary)boundary.Deny();
+                if(RoomDoorGate.Blocks(door))RoomDoorGate.Deny();
+                else if(boundary)boundary.Deny();
                 else
                 {
                     // 二号房间的门：积木谜题没解开、或者还没拿到钥匙，都不允许打开。
@@ -216,6 +219,23 @@ public sealed class PlayerInventory : MonoBehaviour
         foreach(var hit in Physics.SphereCastAll(origin,radius,direction,distance,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore))
             if(!hit.collider.transform.IsChildOf(transform))distance=Mathf.Min(distance,hit.distance-.03f);
         if(distance<.3f){notice="前方空间不足，无法丢弃";noticeUntil=Time.unscaledTime+2;return;}
+
+        // 谜题关键道具（还没摆好的玩偶、信封碎片、积木、钥匙）丢出来时直接落到地面上，
+        // 不给刚体自由下落：否则很容易滚进柜子里、或者穿过地板，玩家就再也找不到了。
+        if(IsUseful(item))
+        {
+            Vector3 spot=origin+direction*distance;
+            if(Physics.Raycast(spot+Vector3.up*.8f,Vector3.down,out var ground,3f,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore))
+            {
+                item.transform.position=ground.point+Vector3.up*.03f;
+                var body=item.GetComponent<Rigidbody>();
+                if(body){body.velocity=Vector3.zero;body.angularVelocity=Vector3.zero;body.useGravity=false;body.isKinematic=true;}
+                item.gameObject.SetActive(true);
+                items.RemoveAt(selected);selected=Mathf.Clamp(selected,0,Mathf.Max(0,items.Count-1));
+                return;
+            }
+        }
+
         item.transform.position=origin+direction*distance;item.gameObject.SetActive(true);
         var rb=item.GetComponent<Rigidbody>();if(!rb)rb=item.gameObject.AddComponent<Rigidbody>();
         rb.isKinematic=false;rb.useGravity=true;rb.collisionDetectionMode=CollisionDetectionMode.ContinuousDynamic;rb.velocity=Vector3.zero;
@@ -298,7 +318,7 @@ public sealed class PlayerInventory : MonoBehaviour
             var r=new Rect(153+i*250,410,222,260);
             Tint(r,new Color(.02f,.12f,.18f,.88f));
             GUI.Label(new Rect(r.x+12,r.y+22,r.width-24,45),names[i],TextStyle(28,TextAnchor.MiddleCenter,new Color(.3f,.9f,1f)));
-            GUI.Label(new Rect(r.x+15,r.y+90,r.width-30,145),found?(i==0?"长大以后我要一直开心":"已找到，等待拼接"):"尚未找到",TextStyle(26,TextAnchor.MiddleCenter,found?Color.white:new Color(.52f,.64f,.7f)));
+            GUI.Label(new Rect(r.x+15,r.y+90,r.width-30,145),found?(i==0?"以后我一定会好好爱护我的玩偶的！":"已找到，等待拼接"):"尚未找到",TextStyle(26,TextAnchor.MiddleCenter,found?Color.white:new Color(.52f,.64f,.7f)));
         }
     }
     void DrawClues()

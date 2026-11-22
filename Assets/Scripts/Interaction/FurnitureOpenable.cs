@@ -12,6 +12,26 @@ public sealed class FurnitureOpenable : MonoBehaviour
     public float openAngle = 88f;
     public float speed = 2.6f;
 
+    /// <summary>剧情锁：true 时玩家按 E 拉不开（剧情调用 Open() 不受影响）。</summary>
+    [System.NonSerialized] public bool locked;
+    /// <summary>拉不开时弹给玩家的一句话。</summary>
+    [System.NonSerialized] public string lockedHint = "";
+
+    public bool Locked => locked;
+
+    /// <summary>玩家手动开合时用：锁着就弹提示，不动。</summary>
+    public void LockByStory(string hint)
+    {
+        locked = true;
+        lockedHint = hint;
+    }
+
+    public void UnlockByStory()
+    {
+        locked = false;
+        lockedHint = "";
+    }
+
     static readonly Vector3[] Axes =
     {
         Vector3.right, Vector3.left, Vector3.forward, Vector3.back
@@ -25,7 +45,9 @@ public sealed class FurnitureOpenable : MonoBehaviour
     Vector3 hingePoint;
     float hingeSign = 1f;
 
-    public string Prompt => slide ? "E 打开 / 关闭抽屉" : "E 打开 / 关闭柜门";
+    public string Prompt => locked
+        ? (slide ? "E 拉一下抽屉" : "E 拉一下柜门")
+        : (slide ? "E 打开 / 关闭抽屉" : "E 打开 / 关闭柜门");
 
     void Awake()
     {
@@ -130,6 +152,12 @@ public sealed class FurnitureOpenable : MonoBehaviour
 
     public void Toggle(Vector3 playerPosition)
     {
+        if (locked)
+        {
+            if (!string.IsNullOrEmpty(lockedHint))
+                StoryProgress.Instance?.Enqueue("抽屉锁着", lockedHint);
+            return;
+        }
         if (!opened)
         {
             if (slide) openingDirection = PickOutward(playerPosition);
@@ -161,6 +189,19 @@ public sealed class FurnitureOpenable : MonoBehaviour
 
     /// <summary>剧情开抽屉时等它滑到位用：返回 0~1 的开门进度。</summary>
     public float OpenAmount => amount;
+
+    /// <summary>
+    /// 剧情用：按调用方算好的方向打开（动画仍然走 Update）。
+    /// 抽屉的“正面”有时很难从模型尺寸推出来，剧情这条路径直接用几何量出来的方向，
+    /// 比 PickOutward 里“水平较短轴 = 进深”的假设稳。
+    /// </summary>
+    public void OpenAlong(Vector3 direction)
+    {
+        Vector3 dir = Vector3.ProjectOnPlane(direction, Vector3.up);
+        if (dir.sqrMagnitude > .0004f) openingDirection = dir.normalized;
+        else if (slide) openingDirection = PickOutwardByClearance();
+        opened = true;
+    }
 
     /// <summary>本次打开的朝向（世界方向）。</summary>
     public Vector3 OpeningDirection => openingDirection;
