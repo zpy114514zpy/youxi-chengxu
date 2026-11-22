@@ -12,11 +12,11 @@ public sealed class FragmentDeposit : MonoBehaviour
     Light[] glows;
     float[] baseIntensity;
 
-    public string Prompt => filled ? "碎片已经放好了" : "E 放置所有信封碎片";
+    public string Prompt => filled ? "碎片已经放好了" : "E 放置所有碎片";
 
     void Awake() { CacheGlows(); }
 
-    /// <summary>把子级的蓝灯缓存下来做呼吸。装配脚本建完灯之后要主动调一次。</summary>
+    /// <summary>把子级的黄灯缓存下来做呼吸。装配脚本建完灯之后要主动调一次。</summary>
     public void CacheGlows()
     {
         glows = GetComponentsInChildren<Light>(true);
@@ -51,8 +51,7 @@ public sealed class FragmentDeposit : MonoBehaviour
         foreach (var c in GetComponentsInChildren<Collider>()) c.enabled = false;
         foreach (var l in GetComponentsInChildren<Light>()) l.enabled = false;
 
-        story?.EnqueueCenter("信封碎片", "所有信封碎片都放进去了。");
-        story?.EnqueueCenter("提示", "二楼的光好像更亮了一些……往下走走吧。");
+        story?.EnqueueCenter("任务完成", "恭喜完成关卡1所有任务！");
         StartCoroutine(GoNextLevel());
     }
 

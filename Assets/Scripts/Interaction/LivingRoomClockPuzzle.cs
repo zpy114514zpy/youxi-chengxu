@@ -77,9 +77,8 @@ public sealed class LivingRoomClockPuzzle : MonoBehaviour
 
         var outline = clock.GetComponent<ProximityOutline>();
         if (!outline) outline = clock.gameObject.AddComponent<ProximityOutline>();
-        outline.outlineColor = new Color(.95f, .82f, .45f, 1f);
-        outline.outlineWidth = .006f;      // 钟只有 29cm，描边粗了会糊成一圈
-        outline.revealDistance = 3.4f;
+        // 和其他可交互道具统一的蓝色描边；钟只有 29cm，描边粗了会糊成一圈。
+        outline.Apply(new Color(.35f, .85f, 1f, 1f), .006f, 3.4f);
 
         dial = clock.GetComponent<ClockDial>();
         if (!dial) dial = clock.gameObject.AddComponent<ClockDial>();
@@ -124,7 +123,7 @@ public sealed class LivingRoomClockPuzzle : MonoBehaviour
             clue.emissive = false;                                     // 只留描边，别叠自发光
             clue.glowRange = 2.2f;
 
-            AddOutline(t, new Color(1f, .82f, .35f, 1f));
+            AddOutline(t, new Color(.35f, .85f, 1f, 1f));              // 纸条统一蓝色描边
             notes.Add(t);
         }
     }
@@ -133,37 +132,58 @@ public sealed class LivingRoomClockPuzzle : MonoBehaviour
 
     void BuildNotebooks()
     {
-        desk = FindExact("SM_Table_A3");
-        if (!desk) { Debug.LogWarning("[时钟谜题] 没找到客厅方桌。"); return; }
-        Bounds db = BoundsOf(desk);
-
-        int count = 0;
-        foreach (var t in AllTransforms())
+        // 桌上摊着两本：SM_Book_2（白色小册）和 Notebook(1)（深红大本）。
+        // 原来是把“桌面上所有书本”都当日记本，现在只让 Notebook(1) 这一本当：
+        // 它带蓝色描边、可以按 E 翻开；白册上不再有任何阅读组件，免得出现第二本。
+        var notebook = FindExact("Notebook(1)");
+        if (!notebook)
         {
-            string n = t.name.ToLowerInvariant();
-            if (!n.Contains("book") && !n.Contains("notebook")) continue;
-            var r = t.GetComponent<Renderer>();
-            if (!r) continue;
-            Bounds b = r.bounds;
-            if (b.size.sqrMagnitude < .0004f) continue;
-
-            Vector2 flat = new Vector2(b.center.x - db.center.x, b.center.z - db.center.z);
-            if (flat.magnitude > 1.1f) continue;
-            if (b.center.y < db.max.y - .15f || b.center.y > db.max.y + .45f) continue;   // 只认摊在桌面上的
-
-            var clue = t.GetComponent<ReadableClue>();
-            if (!clue) clue = t.gameObject.AddComponent<ReadableClue>();
-            clue.title = "日记本";
-            clue.description = "纸页有点卷，字迹潦草。\n\n最后一页只写了一行：「凌晨三点半。」";
-            clue.guideAfterRead = "凌晨三点半——去看看客厅墙上的挂钟。";
-            clue.emissive = false;
-            clue.glowRange = 2.2f;
-
-            AddOutline(t, new Color(.6f, .9f, 1f, 1f));
-            notes.Add(t);
-            count++;
+            desk = FindExact("SM_Table_A3");
+            Debug.LogWarning("[时钟谜题] 没找到 Notebook(1)，日记本这件跳过。");
+            return;
         }
-        Debug.Log("[时钟谜题] 桌面上找到日记本 " + count + " 本");
+        desk = FindExact("SM_Table_A3") ?? notebook;    // 抽屉找不到时用它兜底算位置
+
+        var stale = FindExact("SM_Book_2");
+        if (stale)
+        {
+            var oldClue = stale.GetComponent<ReadableClue>();
+            if (oldClue) Destroy(oldClue);
+            var oldOutline = stale.GetComponent<ProximityOutline>();
+            if (oldOutline) Destroy(oldOutline);
+        }
+
+        var clue = notebook.GetComponent<ReadableClue>();
+        if (!clue) clue = notebook.gameObject.AddComponent<ReadableClue>();
+        clue.title = "日记本";
+        clue.description = "今天爸爸妈妈吵架了，我很难过，我该怎么办！\n\n—— 凌晨三点半";
+        clue.guideAfterRead = "请阅读日记中的内容找寻线索";
+        clue.emissive = false;                 // 只留描边，别把纸面烧白
+        clue.glowRange = 2.6f;
+
+        // 大红本是厘米级模型（缩放 .025），预制体里不一定带碰撞体；没有就按包围盒补一个。
+        if (!notebook.GetComponent<Collider>() && !notebook.GetComponentInChildren<Collider>())
+            AddFitCollider(notebook);
+
+        var outline = notebook.GetComponent<ProximityOutline>();
+        if (!outline) outline = notebook.gameObject.AddComponent<ProximityOutline>();
+        outline.Apply(new Color(.6f, .9f, 1f, 1f), .008f, 2.6f);
+
+        notes.Add(notebook);
+        Debug.Log("[时钟谜题] 日记本已换成 Notebook(1)，位置 " + notebook.position.ToString("F3"));
+    }
+
+    /// <summary>按世界包围盒补一个碰撞盒：厘米级缩放的模型 size 必须先除掉 lossyScale。</summary>
+    static void AddFitCollider(Transform t)
+    {
+        Bounds b = BoundsOf(t);
+        var box = t.gameObject.AddComponent<BoxCollider>();
+        Vector3 s = t.lossyScale;
+        box.center = t.InverseTransformPoint(b.center);
+        box.size = new Vector3(
+            Mathf.Max(.06f, b.size.x) / Mathf.Max(.0001f, Mathf.Abs(s.x)),
+            Mathf.Max(.06f, b.size.y) / Mathf.Max(.0001f, Mathf.Abs(s.y)),
+            Mathf.Max(.06f, b.size.z) / Mathf.Max(.0001f, Mathf.Abs(s.z)));
     }
 
     // ---------------- 抽屉 ----------------
@@ -235,25 +255,15 @@ public sealed class LivingRoomClockPuzzle : MonoBehaviour
 
         var frag = t.gameObject.AddComponent<EnvelopeFragment>();
         frag.fragmentName = FragmentName;
-        frag.text = "抽屉最底下压着的那张纸，像是从信封上撕下来的一角。";
+        frag.text = "愿望破灭的Moment！";
 
         var box = t.gameObject.AddComponent<BoxCollider>();
         FitCollider(box, t, new Vector3(.19f, .02f, .13f));
 
+        // 只保留一圈黄色描边：点光在抽屉这种半封闭空间里会直接烧成一个橙色光球，
+        // 纸面糊掉、字也看不清，所以这里不放任何光源。
         var outline = t.gameObject.AddComponent<ProximityOutline>();
-        outline.outlineColor = new Color(1f, .78f, .16f, 1f);
-        outline.outlineWidth = .012f;
-        outline.revealDistance = 3.2f;
-
-        var lampHost = new GameObject("碎片指引光");
-        lampHost.transform.SetParent(t, false);
-        lampHost.transform.localPosition = Vector3.up * .22f;
-        var lamp = lampHost.AddComponent<Light>();
-        lamp.type = LightType.Point;
-        lamp.color = new Color(1f, .88f, .42f);
-        lamp.range = .62f;
-        lamp.intensity = .08f;
-        lamp.shadows = LightShadows.None;
+        outline.Apply(new Color(1f, .78f, .16f, 1f), .012f, 3.2f);
     }
 
     // ---------------- 拾取后 → 二楼放置点 ----------------
@@ -266,8 +276,8 @@ public sealed class LivingRoomClockPuzzle : MonoBehaviour
         {
             fragmentTaken = true;
             BuildDepositMarker();
-            var story = StoryProgress.Instance;
-            story?.EnqueueCenter("信封碎片", "请将获取的所有信封碎片放至二楼获取钥匙的地点。");
+            // 弹窗交给 StoryProgress.AddFragment("信封碎片⑤") 排：
+            // 先读「碎片五」那一页，玩家按空格关掉之后才弹“去二楼放置”。
         }
     }
 
@@ -284,7 +294,7 @@ public sealed class LivingRoomClockPuzzle : MonoBehaviour
                 Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
             top = hit.point.y + .015f;
 
-        // 蓝色发光圆盘：原来是块报纸材质的薄板，和地板一个颜色，玩家根本看不见。
+        // 黄色发光圆盘：原来是块报纸材质的薄板，和地板一个颜色，玩家根本看不见。
         var spot = new Vector3(at.x, top, at.z);
         var pad = CreatePad("信封碎片放置点", spot);
 
@@ -292,23 +302,21 @@ public sealed class LivingRoomClockPuzzle : MonoBehaviour
         FitCollider(box, pad, new Vector3(.42f, .30f, .42f), new Vector3(0f, .15f, 0f));
 
         var outline = pad.gameObject.AddComponent<ProximityOutline>();
-        outline.outlineColor = new Color(.35f, .62f, 1f, 1f);
-        outline.outlineWidth = .016f;
-        outline.revealDistance = 7f;
+        outline.Apply(new Color(1f, .82f, .32f, 1f), .016f, 7f);
 
-        // 三盏蓝灯从下往上摞，形成一根看得见的光柱；FragmentDeposit 会让它们一起呼吸。
+        // 三盏黄灯从下往上摞，形成一根看得见的光柱；FragmentDeposit 会让它们一起呼吸。
         float[] heights = { .08f, .42f, .92f };
         float[] ranges = { .85f, 1.15f, 1.55f };
         float[] powers = { .55f, .40f, .28f };
         for (int i = 0; i < heights.Length; i++)
         {
-            var host = new GameObject("放置点蓝光" + i);
+            var host = new GameObject("放置点黄光" + i);
             host.transform.SetParent(pad, false);
             // 用世界坐标：pad 被压成 0.006 厚的圆盘，localPosition 会跟着缩得没法用
             host.transform.position = spot + Vector3.up * heights[i];
             var lamp = host.AddComponent<Light>();
             lamp.type = LightType.Point;
-            lamp.color = new Color(.34f, .60f, 1f);
+            lamp.color = new Color(1f, .80f, .34f);       // 和碎片描边同一套黄色，不再发蓝
             lamp.range = ranges[i];
             lamp.intensity = powers[i];
             lamp.shadows = LightShadows.None;
@@ -336,9 +344,9 @@ public sealed class LivingRoomClockPuzzle : MonoBehaviour
             var sh = Shader.Find("Universal Render Pipeline/Unlit");
             if (!sh) sh = Shader.Find("Unlit/Color");
             padMat = new Material(sh);
-            var blue = new Color(.22f, .48f, 1f, 1f);
-            if (padMat.HasProperty("_BaseColor")) padMat.SetColor("_BaseColor", blue);
-            padMat.color = blue;
+            var yellow = new Color(1f, .80f, .30f, 1f);
+            if (padMat.HasProperty("_BaseColor")) padMat.SetColor("_BaseColor", yellow);
+            padMat.color = yellow;
         }
         var r = go.GetComponent<Renderer>();
         if (r) r.sharedMaterial = padMat;
@@ -393,9 +401,8 @@ public sealed class LivingRoomClockPuzzle : MonoBehaviour
     {
         var outline = t.GetComponent<ProximityOutline>();
         if (!outline) outline = t.gameObject.AddComponent<ProximityOutline>();
-        outline.outlineColor = color;
-        outline.outlineWidth = .008f;
-        outline.revealDistance = 2.6f;
+        // 描边材质是 OnEnable 里按默认参数建好的，直接写字段不生效，必须走 Apply。
+        outline.Apply(color, .008f, 2.6f);
     }
 
     static Bounds BoundsOf(Transform t)

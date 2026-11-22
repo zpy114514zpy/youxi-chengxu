@@ -106,6 +106,10 @@ public sealed class StoryProgress : MonoBehaviour
         {
             OnRoom2TidyCompleted();          // 第四个任务：二楼二号房间整理
         }
+        else if(name=="信封碎片⑤")
+        {
+            OnClockTaskCompleted();          // 第五个任务：一楼客厅时钟
+        }
     }
 
     // 已经提示过的内容（标题+正文）。同一条提示只弹一次，玩家反复按 E、来回走都不会刷屏。
@@ -158,8 +162,9 @@ public sealed class StoryProgress : MonoBehaviour
         reading=new Page("碎片三",
             "“希望我以后的每个生日爸爸妈妈都会陪着我，一起幸福的度过！”\n\n—— 小时候的她，写在信封碎片上",
             detail,true,false);
-        EnqueueCenter("提示","信封只差最后一块了，隔壁好像有什么动静。");
-        EnqueueCenter("提示","请前往二楼二号房间查看");
+        Enqueue("任务完成","恭喜完成第三个解密任务！");
+        Enqueue("提示","现在还剩两张信封碎片才可集齐，进入下一关卡。");
+        Enqueue("新的目标","隔壁房间好像需要你去搜索解密，请前往二楼二号房间！");
     }
 
     /// <summary>第四个任务（房间整理）完成后的收尾：读碎片四，然后给最后一个目标。</summary>
@@ -175,6 +180,20 @@ public sealed class StoryProgress : MonoBehaviour
         // 顺序：先关掉「碎片四」这一页，再依次提示“恭喜完成”和“前往一楼客厅”。
         Enqueue("任务完成","恭喜完成第四个解密任务");
         Enqueue("新的目标","请前往一楼客厅完成最后一个解密任务！");
+    }
+
+    /// <summary>第五个任务（客厅时钟）完成后的收尾：先读碎片五，再指引去二楼放置全部碎片。</summary>
+    public void OnClockTaskCompleted()
+    {
+        pages.Clear();
+        current=null;
+        ClearReview();
+        readingPages.Clear();
+        reading=new Page("碎片五",
+            "“愿望破灭的Moment！”\n\n—— 小时候的她，写在信封碎片上",
+            detail,true,false);
+        // 顺序：玩家按空格关掉「碎片五」这一页之后，才弹“去二楼放置碎片”的目标。
+        EnqueueCenter("信封碎片","请将获取的所有信封碎片放置在二楼获取钥匙的地方！");
     }
 
     public void OnBedroomPuzzleSolved()
