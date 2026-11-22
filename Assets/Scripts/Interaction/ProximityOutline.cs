@@ -37,6 +37,13 @@ public sealed class ProximityOutline : MonoBehaviour
         bool shouldShow=closest<=revealDistance;
         if(shouldShow==visible)return;
         visible=shouldShow;
+        // 材质是 OnEnable 时建的，之后再改 outlineColor/outlineWidth 不会自动生效，
+        // 这里每次切换都同步一次，运行时改颜色才管用。
+        if(visible && outline)
+        {
+            outline.SetFloat("_OutlineWidth",outlineWidth);
+            outline.SetColor("_OutlineColor",outlineColor);
+        }
         foreach(var pair in originals)
         {
             if(!pair.Key)continue;

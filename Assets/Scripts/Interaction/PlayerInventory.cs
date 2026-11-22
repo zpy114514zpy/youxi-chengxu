@@ -49,8 +49,10 @@ public sealed class PlayerInventory : MonoBehaviour
             var stool=hit.collider.GetComponentInParent<StoolStep>();
             var pile=hit.collider.GetComponentInParent<BlockPuzzle>();
             var spot=hit.collider.GetComponentInParent<TidySpot>();
+            var clock=hit.collider.GetComponentInParent<ClockDial>();
+            var deposit=hit.collider.GetComponentInParent<FragmentDeposit>();
             if(spot && spot.Prompt.Length==0)spot=null;
-            if(!placement && !readable && !door && !furniture && !item && !keypad && !stool && !push && !pile && !spot)continue;
+            if(!placement && !readable && !door && !furniture && !item && !keypad && !stool && !push && !pile && !spot && !clock && !deposit)continue;
             // 箱子打开后箱体还会挡住射线：它不再是交互目标，直接跳过，让箱口里的碎片能被瞄准。
             if(keypad && keypad.Unlocked && !item)continue;
             nearest=hit.distance;target=null;prompt="";
@@ -72,6 +74,8 @@ public sealed class PlayerInventory : MonoBehaviour
             else if(stool){target=stool;prompt=stool.Prompt;}
             else if(push)prompt="按住 Q + WASD 推动";
             else if(spot){target=spot;prompt=spot.Prompt;}
+            else if(clock){target=clock;prompt=clock.Prompt;}
+            else if(deposit){target=deposit;prompt=deposit.Prompt;}
         }
         if(Input.GetKeyDown(KeyCode.E))
         {
@@ -103,6 +107,8 @@ public sealed class PlayerInventory : MonoBehaviour
             else if(target is StoolStep stool)stool.Interact();
             else if(target is PickupItem item)Take(item);
             else if(target is TidySpot tidySpot)tidySpot.Place(this);
+            else if(target is ClockDial clockDial)clockDial.Tick();
+            else if(target is FragmentDeposit fragmentDeposit)fragmentDeposit.Place();
         }
     }
     /// <summary>

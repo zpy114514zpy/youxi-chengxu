@@ -118,20 +118,11 @@ public static class Room2Setup
             }
         }
 
-        // 也不要在钥匙边上点灯：点光按平方反比衰减，放在 14cm 处几乎必然过曝成白球。
-        // 只留一盏极弱的小灯（0.06）当“这里有东西”的暗示，形状还是靠场景光。
-        if (!key.Find("钥匙微光"))
-        {
-            var lampHost = new GameObject("钥匙微光");
-            lampHost.transform.SetParent(key, false);
-            lampHost.transform.localPosition = Vector3.up * .30f;
-            var lamp = lampHost.AddComponent<Light>();
-            lamp.type = LightType.Point;
-            lamp.color = new Color(1f, .9f, .7f);
-            lamp.range = .38f;
-            lamp.intensity = .06f;
-            lamp.shadows = LightShadows.None;
-        }
+        // 不要在钥匙边上点灯：点光按平方反比衰减，14cm 处 intensity .5 会直接烧成白球；
+        // 降到 .06 又完全看不见（实测开/关两张图逐像素一致），所以干脆不点灯。
+        // 钥匙的形状交给场景光，实测俯视下是清晰的浅灰轮廓。
+        var oldLamp = key.Find("钥匙微光");
+        if (oldLamp) Object.Destroy(oldLamp.gameObject);
 
         Debug.Log("[二楼二号房间] 钥匙已可拾取，位置 " + key.position.ToString("F3"), key);
     }

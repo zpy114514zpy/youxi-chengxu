@@ -85,10 +85,23 @@ public static class DrawerSetup
         {
             Vector3 s = b.size;
             float minDim = Mathf.Min(s.x, Mathf.Min(s.y, s.z));
+            float maxDim = Mathf.Max(s.x, Mathf.Max(s.y, s.z));
             float width = Mathf.Max(s.x, s.z);
 
-            bool thin = minDim < .10f;
-            bool upright = thin && s.y >= width * 1.05f;      // 竖长的薄片 = 柜门
+            // ① 整件家具（柜体/衣柜整壳）：三个维度都不小，当面板拉出来会很怪，直接禁用。
+            //    必须在“柜门”之前判，否则竖高的整台柜子会被当成一扇门。
+            if (minDim > .25f && maxDim > 1.4f)
+            {
+                o.slide = true;
+                o.travel = .02f;
+                o.speed = 2.6f;
+                o.enabled = false;
+                continue;
+            }
+
+            // ② 竖长的薄片 = 柜门。厚度放宽到 0.22：冰箱门这种带弧面的门有 0.18 厚。
+            bool thin = minDim < .22f;
+            bool upright = thin && s.y >= width * 1.05f;
 
             if (upright)
             {
@@ -101,22 +114,15 @@ public static class DrawerSetup
                 continue;
             }
 
-            // 整件家具（大衣柜的柜体网格）不算可开面板，拉出来会很怪
-            float maxDim = Mathf.Max(s.x, Mathf.Max(s.y, s.z));
-            if (minDim > .12f && maxDim > 1.4f)
-            {
-                o.slide = true;
-                o.travel = .02f;
-                o.speed = 2.6f;
-                o.enabled = false;
-                continue;
-            }
-
+            // ③ 其余一律当抽屉：直着朝外拉。
             o.slide = true;
             o.speed = 2.6f;
-            // 拉出距离 = 进深（水平较短轴）的 82%
-            float depth = Mathf.Min(s.x, s.z);
-            o.travel = Mathf.Clamp(depth * .82f, .18f, .36f);
+            // 拉出距离按“开口轴上的实际尺寸”算，而不是 min(x,z)——
+            // 书桌抽屉是 0.44 宽 × 0.76 深，取 min 会把行程算成宽度。
+            Vector3 axis = o.PanelAxis();
+            float depth = Mathf.Abs(Vector3.Dot(s, axis));
+            if (depth < .10f) depth = .28f;        // 纯薄面板没有进深信息，按典型抽屉深度
+            o.travel = Mathf.Clamp(depth * .55f, .20f, .36f);
         }
         return doors;
     }
@@ -134,7 +140,8 @@ public static class DrawerSetup
         {
             Vector3 s = b.size;
             float minDim = Mathf.Min(s.x, Mathf.Min(s.y, s.z));
-            if (minDim >= .10f) continue;
+            if (minDim >= .22f) continue;                      // 与 ClassifyAll 的“薄片”阈值保持一致
+            if (minDim > .25f) continue;                       // 整件家具不参与分组
             if (s.y < Mathf.Max(s.x, s.z) * 1.05f) continue;
             doors.Add((o, b, MeshName(o)));
         }

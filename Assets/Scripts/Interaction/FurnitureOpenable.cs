@@ -58,10 +58,17 @@ public sealed class FurnitureOpenable : MonoBehaviour
         openingDirection = slideDirection;
     }
 
+    /// <summary>
+    /// 面板的 Renderer。很多面板的组件挂在 BP_ 空壳上，必须回退到子物体。
+    /// 注意不能用 `GetComponent<Renderer>() ?? GetComponentInChildren<Renderer>()`：
+    /// Unity 取不到时返回的是“伪 null”，`??` 判不出来，会一路返回 null，
+    /// 于是 Center() 退化成 transform.position（空壳原点），开口方向就全错了。
+    /// </summary>
     Renderer Visual()
     {
         var r = GetComponent<Renderer>();
-        return r ? r : GetComponentInChildren<Renderer>();
+        if (r) return r;
+        return GetComponentInChildren<Renderer>();
     }
 
     /// <summary>面板的视觉中心。抽屉模型的 pivot 常常全压在家具原点上，不能用 transform.position。</summary>
@@ -99,17 +106,37 @@ public sealed class FurnitureOpenable : MonoBehaviour
     }
 
     /// <summary>
-    /// 面板开口的那根轴（无正负）：水平两轴里较短的那条。
-    /// 门板的“短”是厚度（法线），抽屉盒的“短”是进深 —— 两者都对得上。
-    /// 之前用“家具整体包围盒”去推，遇到并排柜体或朝向不同的桌子就会推成横向，这是错的。
+    /// 面板开口的轴（无正负）：取水平两轴里“两侧通空度差得更多”的那一根。
+    ///
+    /// 之前用“较短水平轴”，在抽屉上翻过三次车：抽屉盒的宽度经常比进深还小
+    /// （书桌抽屉 0.44 宽 × 0.76 深），一取短轴就变成横着滑出去。
+    /// 通空度没有这个问题 —— 正面朝房间、背面贴着柜体或墙，沿法线方向两侧必然一空一堵；
+    /// 沿宽度方向两侧通常差不多。这个差值就是开口轴最可靠的证据。
     /// </summary>
     public Vector3 PanelAxis()
     {
-        Vector3 s = PanelBounds().size;
-        return s.x <= s.z ? Vector3.right : Vector3.forward;
+        Vector3 c = Center();
+        if (AlongX(c)) return Vector3.right;
+        return Vector3.forward;
     }
 
-    /// <summary>开口方向：先定轴（较短水平轴），再按“朝玩家 / 前面更空”定正负。</summary>
+    /// <summary>水平开口轴是否取 X（否则取 Z）。两侧都空/都堵时退回“较短水平轴”。</summary>
+    bool AlongX(Vector3 center)
+    {
+        float px = Clearance(center, Vector3.right);
+        float nx = Clearance(center, Vector3.left);
+        float pz = Clearance(center, Vector3.forward);
+        float nz = Clearance(center, Vector3.back);
+        float dx = Mathf.Abs(px - nx), dz = Mathf.Abs(pz - nz);
+        if (Mathf.Max(dx, dz) < .10f)
+        {
+            Vector3 s = PanelBounds().size;
+            return s.x <= s.z;
+        }
+        return dx >= dz;
+    }
+
+    /// <summary>开口方向：轴由通空度定；玩家站在正面时优先“朝玩家”。</summary>
     public Vector3 PickOutward(Vector3 playerPosition)
     {
         Vector3 axis = PanelAxis();
@@ -119,12 +146,11 @@ public sealed class FurnitureOpenable : MonoBehaviour
         if (toPlayer.sqrMagnitude > .04f)
         {
             toPlayer.Normalize();
-            // 玩家大致在正面时，直接用“朝玩家”，最符合直觉
-            if (Mathf.Abs(Vector3.Dot(axis, toPlayer)) > .25f)
-                return axis * (Vector3.Dot(axis, toPlayer) >= 0f ? 1f : -1f);
+            float along = Vector3.Dot(axis, toPlayer);
+            // 只有玩家确实站在这根轴的正前方才听他的（站侧面时沿轴分量很小，会判反）
+            if (Mathf.Abs(along) > .55f) return axis * Mathf.Sign(along);
         }
 
-        // 玩家站在侧面或位置未知：看哪一侧更空（家具正面朝房间、背面贴柜体/墙）
         float pos = Clearance(center, axis);
         float neg = Clearance(center, -axis);
         return pos >= neg ? axis : -axis;

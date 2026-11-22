@@ -63,13 +63,17 @@ public sealed class Room2Tidy : MonoBehaviour
             PreparePush(chair);
         }
 
-        // ② 相册：场景里没有现成的，用一个相框网格复制一份，先丢在沙发边的地上
-        var photo = CreatePhoto(new Vector3(-21.35f, 3.212f, -102.30f));
+        // ② 相册：直接用场景里现成的那只相框摆件（SM_Photo_A4，二楼二号房间地毯上那一只），
+        //    不再 clone 一个新的 —— 自己造出来的那个位置和玩家看到的实物对不上。
+        var photo = FindPhoto();
         if (photo)
         {
-            Add("photo", "相册", photo.transform, new Vector3(-16.5580f, 4.3722f, -104.7070f), Quaternion.identity, false);
-            PreparePickup(photo.transform, .22f);
+            // 从空壳父级里拆出来：之后按世界坐标搬动、放置，不会被父级缩放带歪
+            photo.SetParent(null, true);
+            Add("photo", "相册", photo, new Vector3(-16.5580f, 4.3722f, -104.7070f), photo.rotation, false);
+            PreparePickup(photo, .22f);
         }
+        else Debug.LogWarning("[整理谜题] 没找到场景里的 SM_Photo_A4，相册这件跳过。", this);
 
         // ③ 笔记本电脑
         var laptop = FindNear("SM_Laptop_A3", new Vector3(-17.0f, 3.2f, -102.8f), 2.5f);
@@ -212,29 +216,30 @@ public sealed class Room2Tidy : MonoBehaviour
         return best;
     }
 
-    static Transform CreatePhoto(Vector3 position)
+    /// <summary>
+    /// 二楼二号房间里那只相框摆件。场景里 SM_Photo_A4 这个名字被用了十几次（满地都是同款小相框），
+    /// 所以按“在二楼地板高度 + 离原先那处地毯最近”来认，不能光看名字。
+    /// </summary>
+    static Transform FindPhoto()
     {
-        MeshFilter source = null;
-        foreach (var filter in Object.FindObjectsOfType<MeshFilter>())
-        {
-            if (!filter.sharedMesh) continue;
-            string mesh = filter.sharedMesh.name;
-            if (mesh != "SM_Photo_A4B" && mesh != "SM_Photo_A4" && mesh != "SM_Photo_A5") continue;
-            source = filter;
-            if (mesh == "SM_Photo_A4B") break;
-        }
-        if (!source)
-        {
-            Debug.LogWarning("[整理谜题] 场景里没找到相框网格，相册这件先跳过。");
-            return null;
-        }
+        var preferred = new Vector3(-19.57f, 3.30f, -105.21f);
+        Transform best = null;
+        float bestDistance = 3.0f;
 
-        var clone = Instantiate(source.gameObject, null, true);
-        clone.name = "相册";
-        clone.transform.position = position;
-        clone.transform.rotation = Quaternion.identity;
-        foreach (var outline in clone.GetComponentsInChildren<ProximityOutline>(true)) Destroy(outline);
-        return clone.transform;
+        foreach (var t in AllTransforms())
+        {
+            if (t.name != "SM_Photo_A4") continue;
+            var r = t.GetComponent<Renderer>();
+            if (!r) continue;
+            Bounds b = r.bounds;
+            if (b.center.y < 2.95f || b.center.y > 3.65f) continue;     // 只要二楼地板上的
+            if (b.size.magnitude < .12f || b.size.magnitude > .8f) continue;
+            float d = Vector3.Distance(b.center, preferred);
+            if (d >= bestDistance) continue;
+            bestDistance = d;
+            best = t;
+        }
+        return best;
     }
 
     // ---------------- 提示光 ----------------
