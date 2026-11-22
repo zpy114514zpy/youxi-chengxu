@@ -14,9 +14,9 @@ public sealed class PasswordBoxPuzzle : MonoBehaviour
     public string correctCode = "20221005";
 
     [Header("信封碎片")]
-    public string fragmentName = "信封碎片②";
-    [TextArea] public string fragmentText = "我想和爸爸妈妈一直在一起";
-    public string fragmentDisplayName = "信封碎片②";
+    public string fragmentName = "信封碎片③";
+    [TextArea] public string fragmentText = "希望我以后的每个生日爸爸妈妈都会陪着我，一起幸福的度过！";
+    public string fragmentDisplayName = "信封碎片③";
     [Tooltip("箱子里那块拼图碎片的模型名（场景里 SM_Box_A15 内部的 Plane002）。")]
     public string fragmentModelName = "Plane002";
 
@@ -314,7 +314,7 @@ public sealed class PasswordBoxPuzzle : MonoBehaviour
         var pickup = fragment.GetComponent<PickupItem>();
         if (!pickup) pickup = fragment.AddComponent<PickupItem>();
         pickup.displayName = fragmentDisplayName;
-        pickup.storyId = "letter_fragment_2";
+        pickup.storyId = "letter_fragment_3";
         pickup.itemType = "信封碎片";
         pickup.description = fragmentText;
 
@@ -358,6 +358,14 @@ public sealed class PasswordBoxPuzzle : MonoBehaviour
                 Mathf.Max(.12f, bounds.size.y) / Mathf.Max(.0001f, Mathf.Abs(scale.y)),
                 Mathf.Max(.18f, bounds.size.z) / Mathf.Max(.0001f, Mathf.Abs(scale.z)));
         }
+
+        // 箱子塞在矮柜格里，箱口大半藏在隔板的阴影里；纸片只靠自身一点自发光
+        // 还是容易被当成一块白纸。和碎片①②一致：套一圈黄色描边，
+        // 但不再额外打灯 —— 这么小的空间里点光只会把箱内壁烧成一片白。
+        var outline = fragment.GetComponent<ProximityOutline>();
+        if (!outline) outline = fragment.AddComponent<ProximityOutline>();
+        // 用 Apply 而不是改字段：描边材质在 OnEnable 里就按默认青色建好了。
+        outline.Apply(new Color(1f, .80f, .24f, .85f), .016f, 6f);
     }
 
     Bounds BoxBounds()

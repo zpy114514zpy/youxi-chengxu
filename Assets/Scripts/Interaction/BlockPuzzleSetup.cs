@@ -3,9 +3,9 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 
 /// <summary>
-/// 谜题三（积木块谜题）的运行时装配：不改场景文件。
+/// 谜题二（积木块谜题）的运行时装配：不改场景文件。
 /// 找到场景里那一组“散落的积木”（block 模型实例下的五块），
-/// 在二楼一号房间 1 号门口生成积木堆，并把第三块信封碎片 Line002 藏起来等解密后出现。
+/// 在二楼一号房间 1 号门口生成积木堆，并把第二块信封碎片 Line002 藏起来等解密后出现。
 /// 场景里没有积木就什么都不做。
 /// </summary>
 public static class BlockPuzzleSetup

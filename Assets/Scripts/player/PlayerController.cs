@@ -48,6 +48,12 @@ public class PlayerController : MonoBehaviour
     float stepOffTimer;
     public bool OnPlatform => platformLock;
 
+    // ---- 坐在椅子上 ----
+    // 和“站到凳子上”共用平台锁定（关重力 + 每帧钉住），区别只是额外压低视角，
+    // 让镜头停在坐姿高度；起身或者按方向键就解掉。
+    bool sitting;
+    public bool Sitting => sitting;
+
     [Header("游戏视角")]
     [Tooltip("站立时镜头距脚底的高度（米），不随待机动画上下晃动。")]
     [Range(0.6f, 1.5f)] public float standingEyeHeight = 0.9f;
@@ -127,6 +133,8 @@ public class PlayerController : MonoBehaviour
 
     void UpdateCrouch()
     {
+        // 坐着的时候视角由 SitOn 接管，别让“没按蹲键”把压低的那截视角又顶回去。
+        if (sitting) return;
         SetCrouching(Input.GetKey(crouchKey));
     }
 
@@ -275,6 +283,30 @@ public class PlayerController : MonoBehaviour
         if (!platformLock) return;
         platformLock = false;
         if (body) body.useGravity = true;
+        if (sitting)
+        {
+            sitting = false;
+            if (firstPerson) firstPerson.SetCrouchOffset(0f);
+        }
+    }
+
+    // ---------- 坐椅子（书桌前那把） ----------
+
+    /// <summary>坐上椅子：钉在椅面上、把视角压到坐姿高度，直到玩家按 E 起身或者按方向键站起来。</summary>
+    public void SitOn(Vector3 feetWorld, float eyeDrop)
+    {
+        StandOnPlatform(feetWorld);
+        sitting = true;
+        if (firstPerson) firstPerson.SetCrouchOffset(Mathf.Max(0f, eyeDrop));
+    }
+
+    /// <summary>起身：先试着往身后迈一步，迈不动就交还重力（椅子矮，掉下去也不会摔坏）。</summary>
+    public void StandUp()
+    {
+        if (!sitting) return;
+        sitting = false;
+        if (firstPerson) firstPerson.SetCrouchOffset(0f);
+        if (!StepOff(-transform.forward)) LeavePlatform();
     }
 
     /// <summary>
@@ -283,6 +315,8 @@ public class PlayerController : MonoBehaviour
     /// </summary>
     void UpdatePlatform(float dt)
     {
+        // 坐着的时候按方向键 = 起身（不是从凳子上迈下去，先站起来再走）。
+        if (sitting && direction.sqrMagnitude > .001f) { StandUp(); return; }
         if (direction.sqrMagnitude > .001f) stepOffTimer += dt; else stepOffTimer = 0f;
         if (stepOffTimer > .22f && StepOff(direction)) return;
 

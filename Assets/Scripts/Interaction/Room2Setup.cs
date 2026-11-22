@@ -1,10 +1,11 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
 /// <summary>
 /// 二楼二号房间的运行时装配：
-/// ① 二号房门（走廊里那扇 BP_Door_Inside_A2）上锁：积木谜题没解开不能开，解开后需要钥匙；
+/// ① 二号房门（走廊里那扇 BP_Door_Inside_A2）上锁：只要拿到电视柜抽屉里的钥匙就能开，
+///    不再要求先做完积木谜题（那套顺序只管一号房间的 2 号门 A6）；
 /// ② 把电视柜第二层抽屉里的 key(1) 做成可以按 E 拾取的钥匙（位置不动，就在抽屉里）；
 /// ③ 房间里的小房间门（BP_Door_Inside_A7）先锁住，等整理谜题做完自动打开。
 /// 不改场景文件。
@@ -42,7 +43,9 @@ public static class Room2Setup
         if (!door) { Debug.LogWarning("[二号房间] 没找到 " + RoomDoorName); return; }
         var gate = door.GetComponent<DoorLock>();
         if (!gate) gate = door.gameObject.AddComponent<DoorLock>();
-        gate.requireBlockPuzzle = true;
+        // 这扇门只认钥匙：积木谜题是通往一号房间 2 号门（A6）的前置，不该拦这里。
+        // 之前写成 true，玩家在走廊柜子里拿到钥匙、还没做积木谜题时门就打不开。
+        gate.requireBlockPuzzle = false;
         gate.requiredItemId = "room2_key";
         gate.requireRoom2Tidy = false;
         gate.startsRoom2Tidy = true;
@@ -100,12 +103,9 @@ public static class Room2Setup
                 Mathf.Clamp(size.z, .04f, .08f) / Mathf.Max(.0001f, Mathf.Abs(scale.z)));
         }
 
-        // 描边 shader 是加色混合（Blend SrcAlpha One），再叠 URP 的 Bloom，
-        // 钥匙这种几厘米的小物件会被糊成一团青光，完全看不出是钥匙。先去掉描边。
-        var outline = key.GetComponent<ProximityOutline>();
-        if (outline) Object.Destroy(outline);
-
-        // 钥匙材质如果是 Unreal 导过来的自发光，也会在暗处烧成一团。把自发光关掉。
+        // 钥匙材质如果是 Unreal 导过来的自发光，也会在暗处烧成一团。把自发光关掉，
+        // 提示全部交给 DrawerItemHint —— 只有一圈蓝色描边，不点灯，
+        // 所以抽屉关着时完全看不出这里藏着东西。
         foreach (var r in key.GetComponentsInChildren<Renderer>(true))
         {
             foreach (var mat in r.materials)
@@ -118,11 +118,17 @@ public static class Room2Setup
             }
         }
 
-        // 不要在钥匙边上点灯：点光按平方反比衰减，14cm 处 intensity .5 会直接烧成白球；
-        // 降到 .06 又完全看不见（实测开/关两张图逐像素一致），所以干脆不点灯。
-        // 钥匙的形状交给场景光，实测俯视下是清晰的浅灰轮廓。
+        // 场景 / 预制体里若还残留「钥匙微光」子物体，先清掉：
+        // 点光按平方反比衰减，14cm 处 intensity .5 会直接烧成白球，降到 .06 又完全看不见。
         var oldLamp = key.Find("钥匙微光");
         if (oldLamp) Object.Destroy(oldLamp.gameObject);
+
+        // 钥匙就摆在抽屉里，DrawerItemHint 只负责“藏 / 露 + 提示”：
+        // 抽屉关着时关掉渲染器和碰撞体（不漏光、也不能隔空捡），
+        // 一拉开钥匙就跟着抽屉一起滑出来，露出一圈蓝色描边。不点灯，不会提前剧透。
+        var hint = key.GetComponent<DrawerItemHint>();
+        if (!hint) hint = key.gameObject.AddComponent<DrawerItemHint>();
+        hint.Setup();
 
         Debug.Log("[二楼二号房间] 钥匙已可拾取，位置 " + key.position.ToString("F3"), key);
     }

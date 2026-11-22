@@ -3,17 +3,17 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 谜题三《积木块谜题》：二楼一号房间 1 号门口有一个积木堆，五块积木散落在房间各处。
+/// 谜题二《积木块谜题》：二楼一号房间 1 号门口有一个积木堆，五块积木散落在房间各处。
 /// 玩家把积木一块块捡起来搬回积木堆、在堆上按 E 放上去；五块全部归位后，
-/// 房间里的柜子会自动弹开，露出第三块信封碎片（Line002），拾取后结束本关。
+/// 房间里的柜子会自动弹开，露出第二块信封碎片（Line002），拾取后结束本关。
 /// 整个积木堆、提示光点、碰撞体都在运行时生成，不改场景文件。
 /// </summary>
 [DisallowMultipleComponent]
 public sealed class BlockPuzzle : MonoBehaviour
 {
     [Header("碎片")]
-    public string fragmentName = "信封碎片③";
-    [TextArea] public string fragmentText = "童年幻想里未来闪闪发光的自己";
+    public string fragmentName = "信封碎片②";
+    [TextArea] public string fragmentText = "长大之后我一定会做个追求自己热爱的、开心的人！";
 
     [Header("放置")]
     [Tooltip("玩家离积木堆超过这个距离就不允许放置（水平距离，单位米）。")]
@@ -33,6 +33,7 @@ public sealed class BlockPuzzle : MonoBehaviour
 
     readonly List<GameObject> blocks = new List<GameObject>();
     readonly List<GameObject> pads = new List<GameObject>();
+    readonly List<Transform> pieces = new List<Transform>();
     GameObject fragment;
     Transform drawer;
     PlayerInventory inventory;
@@ -40,6 +41,8 @@ public sealed class BlockPuzzle : MonoBehaviour
     int placed;
     bool solved;
     bool revealing;
+    bool fragmentShown;
+    Font labelFont;
 
     public bool Solved => solved;
     public int Placed => placed;
@@ -68,6 +71,9 @@ public sealed class BlockPuzzle : MonoBehaviour
         transform.rotation = Quaternion.identity;
         fragment = fragmentModel;
 
+        this.pieces.Clear();
+        if (pieces != null) this.pieces.AddRange(pieces);
+
         BuildBase(pieces);
         AttachPieces(pieces);
         BuildPads();
@@ -77,7 +83,20 @@ public sealed class BlockPuzzle : MonoBehaviour
         body.center = new Vector3(0f, .07f, 0f);
         body.size = new Vector3(1.00f, .14f, .86f);
 
+        StartCoroutine(StashBedsideBlock());
+
         Debug.Log("[积木谜题] 积木堆已生成于 " + ground.ToString("F3") + "，可放置积木 " + blocks.Count + " 块。", this);
+    }
+
+    /// <summary>
+    /// 卧室床边地上那块积木不该散在外面 —— 收进旁边的床头柜抽屉里，玩家得拉开抽屉才能拿到。
+    /// DrawerSetup 也在这个时间点装配（顺序不确定），所以等两帧再找已经挂好交互的抽屉。
+    /// </summary>
+    IEnumerator StashBedsideBlock()
+    {
+        yield return null;
+        yield return null;
+        BedsideBlockStash.Stash(pieces);
     }
 
     void BuildBase(List<Transform> pieces)
@@ -368,9 +387,49 @@ public sealed class BlockPuzzle : MonoBehaviour
         fragment.transform.position = position;
         fragment.SetActive(true);
         SetupFragmentPickup();
+        EnsureFragmentGlow();
+        fragmentShown = true;
 
         StoryProgress.Instance?.RecordClue("柜子自动弹开了，里面压着一张信封碎片。");
-        Debug.Log("[积木谜题] 柜子已弹开，信封碎片③出现在 " + position.ToString("F3"), this);
+        Debug.Log("[积木谜题] 柜子已弹开，" + fragmentName + "出现在 " + position.ToString("F3"), this);
+    }
+
+    /// <summary>
+    /// 碎片②只套一圈黄色描边，不再挂点光。
+    /// 纸片很小，点光一放在抽屉里就会把整个抽屉内壁烧成一片黄白，纸上的字反而看不见；
+    /// 描边本身已经足够把玩家的注意力拉过去。
+    /// </summary>
+    void EnsureFragmentGlow()
+    {
+        if (!fragment) return;
+
+        var outline = fragment.GetComponent<ProximityOutline>();
+        if (!outline) outline = fragment.AddComponent<ProximityOutline>();
+        // 必须用 Apply：描边材质是在 OnEnable 里按默认（青色）建好的，直接改字段不生效。
+        outline.Apply(new Color(1f, .80f, .24f, .85f), .016f, 6f);
+    }
+
+    /// <summary>碎片上方跟一条“E 拾取”的浮字，配合准星提示一起告诉玩家怎么拿。</summary>
+    void OnGUI()
+    {
+        if (!fragmentShown || !fragment || !fragment.activeSelf) return;
+        var story = StoryProgress.Instance;
+        if (story && story.IsShowingPage) return;      // 剧情面板正在播时不要叠字
+        var cam = Camera.main;
+        if (!cam) return;
+        if (!player) player = FindObjectOfType<PlayerController>();
+        if (player && (player.transform.position - fragment.transform.position).sqrMagnitude > 36f) return;
+
+        Vector3 screen = cam.WorldToScreenPoint(fragment.transform.position + Vector3.up * .16f);
+        if (screen.z <= 0f) return;
+        if (!labelFont) labelFont = Font.CreateDynamicFontFromOSFont(new[] { "Microsoft YaHei", "SimHei", "Arial" }, 20);
+        var style = new GUIStyle(GUI.skin.box) { font = labelFont, fontSize = 15, alignment = TextAnchor.MiddleCenter };
+        GUI.Box(new Rect(screen.x - 112f, Screen.height - screen.y - 40f, 224f, 30f), "E 拾取 " + fragmentName, style);
+    }
+
+    void OnDestroy()
+    {
+        if (labelFont) Destroy(labelFont);
     }
 
     /// <summary>量出抽屉内侧底面高度（照射线，只认抽屉自己的碰撞体）。</summary>
@@ -414,7 +473,7 @@ public sealed class BlockPuzzle : MonoBehaviour
         var pickup = fragment.GetComponent<PickupItem>();
         if (!pickup) pickup = fragment.AddComponent<PickupItem>();
         pickup.displayName = fragmentName;
-        pickup.storyId = "letter_fragment_3";
+        pickup.storyId = "letter_fragment_2";
         pickup.itemType = "信封碎片";
         pickup.description = fragmentText;
 

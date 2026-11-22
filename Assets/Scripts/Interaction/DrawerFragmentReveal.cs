@@ -5,7 +5,7 @@ using UnityEngine.SceneManagement;
 
 // 关卡一收尾：四个玩偶归位、剧情 UI 播完之后，
 // 自动拉开书桌【中间】抽屉（模型里的 Draw 1/2/3_low 里正中间那个，沿面板法线垂直于桌体滑出），
-// 再把信封碎片①（对象007）放进抽屉里，加黄色发光描边 + “E 拾取”提示，供玩家拾取。
+// 再把信封碎片①（对象007）放进抽屉里，加黄色描边 + “E 拾取”提示，供玩家拾取。
 [DisallowMultipleComponent]
 public sealed class DrawerFragmentReveal : MonoBehaviour
 {
@@ -30,7 +30,6 @@ public sealed class DrawerFragmentReveal : MonoBehaviour
     bool placed;
     Coroutine routine;
     PlayerController player;
-    Light glow;
     Font font;
 
     /// <summary>由 BedroomToyPuzzle 在谜题解开时调用。</summary>
@@ -144,28 +143,18 @@ public sealed class DrawerFragmentReveal : MonoBehaviour
         Debug.Log("[抽屉] 信封碎片已放入抽屉：世界坐标 " + fragment.transform.position.ToString("F3"), this);
     }
 
-    /// <summary>给碎片套一圈暖黄色发光描边，抽屉一拉开就能一眼看到（整间屋子都亮着）。</summary>
+    /// <summary>
+    /// 给碎片套一圈暖黄色描边（只描边，不打灯）。
+    /// 以前抽屉里还挂了一盏点光，纸片离得近，光会把整个抽屉内壁烧成一片黄白，
+    /// 纸上的字反而看不清——所以这里只用描边告诉玩家“这里有东西”。
+    /// </summary>
     void EnsureYellowGlow()
     {
         if (!fragment) return;
         var outline = fragment.GetComponent<ProximityOutline>();
         if (!outline) outline = fragment.AddComponent<ProximityOutline>();
-        outline.outlineColor = new Color(1f, .78f, .16f, 1f);
-        outline.outlineWidth = .022f;
-        outline.revealDistance = 12f;      // 远一点也保持亮着，玩家不会走过了还找不到
-        outline.enabled = true;
-
-        if (glow) return;
-        // 再加一盏小黄灯：抽屉里光线暗，只有描边可能还是不够显眼。
-        var host = new GameObject("碎片指引光");
-        host.transform.position = fragment.transform.position;
-        glow = host.AddComponent<Light>();
-        glow.type = LightType.Point;
-        glow.color = new Color(1f, .86f, .36f);
-        glow.range = 1.1f;
-        glow.intensity = .8f;
-        glow.shadows = LightShadows.None;
-        glow.enabled = false;      // 等碎片真正显示出来再点亮（LateUpdate 里同步）
+        // Apply 会顺手把已经建好的描边材质改掉；只改字段的话颜色仍是默认的青色。
+        outline.Apply(new Color(1f, .78f, .16f, .85f), .016f, 8f);   // 站在书桌前一定看得见，远了也不用亮
     }
 
     /// <summary>碎片附近给一条“E 拾取”的浮字，配合底部操作条一起提示。</summary>
@@ -188,7 +177,6 @@ public sealed class DrawerFragmentReveal : MonoBehaviour
 
     void OnDestroy()
     {
-        if (glow) Destroy(glow.gameObject);
         if (font) Destroy(font);
     }
 
@@ -215,12 +203,8 @@ public sealed class DrawerFragmentReveal : MonoBehaviour
     void LateUpdate()
     {
         if (!placed || !drawer || !fragment) return;
-        bool visible = fragment.activeSelf;
-        if (glow && glow.enabled != visible) glow.enabled = visible;   // 捡走以后把灯一起关掉
-        if (!visible) return;
+        if (!fragment.activeSelf) return;
         fragment.transform.position = drawer.position + fragmentOffset;
-        if (glow && glow.enabled)
-            glow.transform.position = fragment.transform.position + Vector3.up * .1f;
     }
 
     // ---------- 查找 ----------

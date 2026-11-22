@@ -96,11 +96,15 @@ public sealed class StoryProgress : MonoBehaviour
         }
         else if(name=="信封碎片②")
         {
-            OnSecondTaskCompleted();
+            OnBlockTaskCompleted();          // 第二个任务：二楼一号房间的积木块谜题
         }
         else if(name=="信封碎片③")
         {
-            OnThirdTaskCompleted();
+            OnPasswordTaskCompleted();       // 第三个任务：密码箱
+        }
+        else if(name=="信封碎片④")
+        {
+            OnRoom2TidyCompleted();          // 第四个任务：二楼二号房间整理
         }
     }
 
@@ -128,24 +132,49 @@ public sealed class StoryProgress : MonoBehaviour
         return shownHints.Add((title??"")+"|"+(message??""));                                     // 说过的不再说
     }
 
-    /// <summary>第二个任务（密码箱）完成后的收尾。</summary>
-    public void OnSecondTaskCompleted()
+    /// <summary>第二个任务（积木块谜题）完成后的收尾：先读碎片二，再给“去二号门”的新目标。</summary>
+    public void OnBlockTaskCompleted()
     {
         pages.Clear();
         current=null;
-        AddPages("第二个任务完成","恭喜完成第二个任务",opening,true);
-        EnqueueCenter("提示","隔壁好像有什么动静，我去看看！");
-        EnqueueCenter("提示","请前往二楼一号房间一号门查看");
+        ClearReview();
+        readingPages.Clear();
+        reading=new Page("碎片二",
+            "“长大之后我一定会做个追求自己热爱的、开心的人！”\n\n—— 小时候的她，写在信封碎片上",
+            detail,true,false);
+        // 顺序和碎片一一致：玩家按空格关掉「碎片二」这一页之后，才弹“去二号门”的目标。
+        Enqueue("新的目标","请前往二楼一号房间2号门，完成第三个解密任务。");
+        // 提示排进去的这一刻，二号门才可以打开（在这之前一直锁着，防止提前跳关）。
+        RoomDoorGate.UnlockDoorTwo();
     }
 
-    /// <summary>第三个任务（积木谜题）完成后的收尾。</summary>
-    public void OnThirdTaskCompleted()
+    /// <summary>第三个任务（密码箱谜题）完成后的收尾：读碎片三，并把玩家引向二楼二号房间。</summary>
+    public void OnPasswordTaskCompleted()
     {
         pages.Clear();
         current=null;
-        AddPages("积木谜题完成","恭喜完成积木谜题！",opening,true);
-        EnqueueCenter("提示","玩家可以打开二楼二号房间了");
-        EnqueueCenter("内心独白","我记得，二楼二号门的钥匙好像被遗落在哪里了，好像在走廊里？");
+        ClearReview();
+        readingPages.Clear();
+        reading=new Page("碎片三",
+            "“希望我以后的每个生日爸爸妈妈都会陪着我，一起幸福的度过！”\n\n—— 小时候的她，写在信封碎片上",
+            detail,true,false);
+        EnqueueCenter("提示","信封只差最后一块了，隔壁好像有什么动静。");
+        EnqueueCenter("提示","请前往二楼二号房间查看");
+    }
+
+    /// <summary>第四个任务（房间整理）完成后的收尾：读碎片四，然后给最后一个目标。</summary>
+    public void OnRoom2TidyCompleted()
+    {
+        pages.Clear();
+        current=null;
+        ClearReview();
+        readingPages.Clear();
+        reading=new Page("碎片四",
+            "“我希望家里永远是干干净净的！”\n\n—— 小时候的她，写在信封碎片上",
+            detail,true,false);
+        // 顺序：先关掉「碎片四」这一页，再依次提示“恭喜完成”和“前往一楼客厅”。
+        Enqueue("任务完成","恭喜完成第四个解密任务");
+        Enqueue("新的目标","请前往一楼客厅完成最后一个解密任务！");
     }
 
     public void OnBedroomPuzzleSolved()

@@ -27,15 +27,19 @@ public sealed class PlayerInventory : MonoBehaviour
         if(StoryProgress.Instance && StoryProgress.Instance.IsReading)return;
         if(Input.GetKeyDown(KeyCode.B))SetOpen(!IsOpen);
         if(IsOpen&&Input.GetKeyDown(KeyCode.Escape))SetOpen(false);
-        if(Input.GetKeyDown(KeyCode.G))Drop();
+        // 背包开着、或者鼠标还放在界面上的时候不响应丢弃：否则会在看不见准星的情况下把道具扔在脚边。
+        if(!IsOpen&&Cursor.lockState==CursorLockMode.Locked&&Input.GetKeyDown(KeyCode.G))Drop();
         if(IsOpen||Cursor.lockState!=CursorLockMode.Locked)return;
         var cam=Camera.main;if(!cam)return;
         float nearest=reach;
+        // 抽屉里的东西总是先撞到柜板，所以“能捡的道具”单独记一份，最后让它优先于抽屉/柜门。
+        PickupItem reachableItem=null;
+        float reachableItemDistance=float.MaxValue;
         // 用带半径的球扫而不是细射线：信封碎片、相册这类又薄又小的东西，
         // 细射线很容易从边上擦过去，玩家明明瞄准了却按不出提示。
         foreach(var hit in Physics.SphereCastAll(cam.transform.position,.085f,cam.transform.forward,reach,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore))
         {
-            if(hit.collider.transform.IsChildOf(transform)||hit.distance>=nearest)continue;
+            if(hit.collider.transform.IsChildOf(transform)||hit.distance>=reach)continue;
             var door=hit.collider.GetComponentInParent<InteractiveDoor>();
             var furniture=hit.collider.GetComponentInParent<FurnitureOpenable>();
             var placement=hit.collider.GetComponentInParent<StoryPlacement>();
@@ -44,6 +48,8 @@ public sealed class PlayerInventory : MonoBehaviour
             // 场景里的装饰玩具、书、已经摆好的玩偶都带 PickupItem：不是当前谜题要用的东西，
             // 不允许拾取，连“E 拾取 玩具”的提示也不要出现。
             if(item && !IsUseful(item))item=null;
+            if(item&&hit.distance<reachableItemDistance){reachableItem=item;reachableItemDistance=hit.distance;}
+            if(hit.distance>=nearest)continue;
             var push=hit.collider.GetComponentInParent<PushProp>();
             var keypad=hit.collider.GetComponentInParent<PasswordBoxPuzzle>();
             var stool=hit.collider.GetComponentInParent<StoolStep>();
@@ -51,8 +57,10 @@ public sealed class PlayerInventory : MonoBehaviour
             var spot=hit.collider.GetComponentInParent<TidySpot>();
             var clock=hit.collider.GetComponentInParent<ClockDial>();
             var deposit=hit.collider.GetComponentInParent<FragmentDeposit>();
+            var chair=hit.collider.GetComponentInParent<ChairSeat>();
             if(spot && spot.Prompt.Length==0)spot=null;
-            if(!placement && !readable && !door && !furniture && !item && !keypad && !stool && !push && !pile && !spot && !clock && !deposit)continue;
+            if(chair && chair.Prompt.Length==0)chair=null;
+            if(!placement && !readable && !door && !furniture && !item && !keypad && !stool && !push && !pile && !spot && !clock && !deposit && !chair)continue;
             // 箱子打开后箱体还会挡住射线：它不再是交互目标，直接跳过，让箱口里的碎片能被瞄准。
             if(keypad && keypad.Unlocked && !item)continue;
             nearest=hit.distance;target=null;prompt="";
@@ -72,11 +80,22 @@ public sealed class PlayerInventory : MonoBehaviour
             else if(pile){target=pile;prompt=pile.Prompt;}
             else if(keypad){target=keypad;prompt=keypad.Prompt;}
             else if(stool){target=stool;prompt=stool.Prompt;}
+            else if(chair){target=chair;prompt=chair.Prompt;}
             else if(push)prompt="按住 Q + WASD 推动";
             else if(spot){target=spot;prompt=spot.Prompt;}
             else if(clock){target=clock;prompt=clock.Prompt;}
             else if(deposit){target=deposit;prompt=deposit.Prompt;}
         }
+        // 道具优先：站在抽屉/柜子前面时，只要里面那件东西够得着，就按“拾取”而不是“开抽屉”。
+        if(reachableItem&&reachableItemDistance<=nearest+.75f)
+        {
+            target=reachableItem;
+            prompt="E 拾取 "+reachableItem.displayName;
+        }
+        // 坐着的时候椅子自己的碰撞体是关着的（不然角色会被物理系统顶出椅面），准星扫不到它；
+        // 这里把交互目标强行指回椅子，否则坐下之后就再也按不了 E 起身。
+        var seatedChair=ChairSeat.Current;
+        if(seatedChair&&seatedChair.Seated){target=seatedChair;prompt=seatedChair.Prompt;}
         if(Input.GetKeyDown(KeyCode.E))
         {
             if(target is StoryPlacement placement)
@@ -87,7 +106,7 @@ public sealed class PlayerInventory : MonoBehaviour
             else if(target is InteractiveDoor door)
             {
                 var boundary=door.GetComponentInParent<ExitBoundary>();
-                if(RoomDoorGate.Blocks(door))RoomDoorGate.Deny();
+                if(RoomDoorGate.Blocks(door))RoomDoorGate.Deny(door);
                 else if(boundary)boundary.Deny();
                 else
                 {
@@ -96,6 +115,8 @@ public sealed class PlayerInventory : MonoBehaviour
                     if(gate && !door.IsOpen && !gate.TryUnlock(this)) { }
                     else
                     {
+                        Debug.Log("[门] "+door.name+" 交互："+(door.IsOpen?"关门":"开门")
+                            +(gate?"（锁已解开）":"（没有门锁组件）"),door);
                         door.Toggle(transform.position);
                         var intro=door.GetComponent<DoorRoomIntro>();if(intro && door.IsOpening)intro.OnOpened();
                     }
@@ -105,6 +126,7 @@ public sealed class PlayerInventory : MonoBehaviour
             else if(target is PasswordBoxPuzzle keypad)keypad.Interact();
             else if(target is BlockPuzzle blockPile)blockPile.Interact(this);
             else if(target is StoolStep stool)stool.Interact();
+            else if(target is ChairSeat chair)chair.Interact();
             else if(target is PickupItem item)Take(item);
             else if(target is TidySpot tidySpot)tidySpot.Place(this);
             else if(target is ClockDial clockDial)clockDial.Tick();
@@ -173,16 +195,29 @@ public sealed class PlayerInventory : MonoBehaviour
     {
         if (!item || items.Contains(item)) return;
         var fragment=item.GetComponent<EnvelopeFragment>();
+        if(!fragment&&items.Count>=capacity){ShowNotice("背包已满");return;}
+
+        // 有些道具是从抽屉里拿的（积木、碎片）：先把“抽屉关着就隐藏”的开关解掉，
+        // 否则捡起来再按 G 丢出去，东西是 SetActive(true) 了、渲染器却还关着 —— 隐形砖头一块。
+        var stash=item.GetComponentInParent<StashedBlock>();
+        if(stash)stash.Release();
+        // 钥匙这类“抽屉里的小物件”同理：它可能正被隐藏、还挂在抽屉面板下面。
+        var drawerHint=item.GetComponentInParent<DrawerItemHint>();
+        if(drawerHint)drawerHint.Release();
+        // 再挂回场景根节点，否则玩家之后把抽屉一推、或者丢出来的时候，东西会跟着抽屉一起跑。
+        if (item.transform.parent) item.transform.SetParent(null, true);
+
+        var player=GetComponent<PlayerController>();
         if(fragment)
         {
             if(StoryProgress.Instance)StoryProgress.Instance.AddFragment(fragment.fragmentName,fragment.text);
             item.gameObject.SetActive(false);
-            GetComponent<PlayerController>().PlayPickup();
+            if(player)player.PlayPickup();
             return;
         }
-        if(items.Count>=capacity){ShowNotice("背包已满");return;}
         items.Add(item);item.gameObject.SetActive(false);selected=items.Count-1;
-        GetComponent<PlayerController>().PlayPickup();
+        Debug.Log("[拾取] "+item.displayName+"（id="+item.storyId+"），背包里现有 "+items.Count+" 件。",item);
+        if(player)player.PlayPickup();
     }
     public PickupItem ConsumeSelected(string id)
     {
@@ -219,12 +254,32 @@ public sealed class PlayerInventory : MonoBehaviour
     {
         if(items.Count==0)return;
         selected=Mathf.Clamp(selected,0,items.Count-1);var item=items[selected];var cam=Camera.main;if(!item||!cam)return;
+
+        // 视线压到最低、或者垂直往下看时，forward 的水平投影会变成零向量，
+        // 归一化之后是 (0,0,0)，道具会被丢在脚底下（甚至是原点）。这里逐级兜底。
+        Vector3 direction=Vector3.ProjectOnPlane(cam.transform.forward,Vector3.up);
+        if(direction.sqrMagnitude<.001f)direction=Vector3.ProjectOnPlane(cam.transform.up,Vector3.up);
+        if(direction.sqrMagnitude<.001f)direction=Vector3.ProjectOnPlane(transform.forward,Vector3.up);
+        if(direction.sqrMagnitude<.001f)direction=Vector3.forward;
+        direction.Normalize();
+
         var renderer=item.GetComponentInChildren<Renderer>(true);float radius=renderer?Mathf.Clamp(renderer.bounds.extents.magnitude,.08f,.3f):.12f;
-        Vector3 direction=Vector3.ProjectOnPlane(cam.transform.forward,Vector3.up).normalized;
         Vector3 origin=cam.transform.position;float distance=.65f;
         foreach(var hit in Physics.SphereCastAll(origin,radius,direction,distance,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore))
-            if(!hit.collider.transform.IsChildOf(transform))distance=Mathf.Min(distance,hit.distance-.03f);
-        if(distance<.3f){notice="前方空间不足，无法丢弃";noticeUntil=Time.unscaledTime+2;return;}
+        {
+            if(hit.collider.transform.IsChildOf(transform))continue;
+            if(hit.collider.GetComponentInParent<PickupItem>())continue;      // 地上别的道具不算挡路
+            distance=Mathf.Min(distance,hit.distance-.04f);
+        }
+        if(distance<.18f){ShowNotice("前方空间不足，换个方向再丢");return;}
+
+        // 先摘掉父级：否则从抽屉里拿出来的东西丢出去还挂在抽屉上，抽屉一动它又跟着跑。
+        // 摘之前先把“藏在抽屉里”的状态解掉（渲染器一直是关着的），不然丢出来的是块隐形砖头。
+        var stashInDrawer=item.GetComponentInParent<StashedBlock>();
+        if(stashInDrawer)stashInDrawer.Release();
+        var hintInDrawer=item.GetComponentInParent<DrawerItemHint>();
+        if(hintInDrawer)hintInDrawer.Release();
+        if(item.transform.parent)item.transform.SetParent(null,true);
 
         // 谜题关键道具（还没摆好的玩偶、信封碎片、积木、钥匙）丢出来时直接落到地面上，
         // 不给刚体自由下落：否则很容易滚进柜子里、或者穿过地板，玩家就再也找不到了。
@@ -234,9 +289,16 @@ public sealed class PlayerInventory : MonoBehaviour
             if(Physics.Raycast(spot+Vector3.up*.8f,Vector3.down,out var ground,3f,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore))
             {
                 item.transform.position=ground.point+Vector3.up*.03f;
+                item.gameObject.SetActive(true);
+                // 从抽屉里出来的积木可能还带着 StashedBlock 的“隐藏”状态，这里再确认一次是可见的。
+                var stash=item.GetComponent<StashedBlock>();
+                if(!stash)stash=item.GetComponentInChildren<StashedBlock>(true);
+                if(stash)stash.Release();
+                var hint=item.GetComponent<DrawerItemHint>();
+                if(!hint)hint=item.GetComponentInChildren<DrawerItemHint>(true);
+                if(hint)hint.Release();
                 var body=item.GetComponent<Rigidbody>();
                 if(body){body.velocity=Vector3.zero;body.angularVelocity=Vector3.zero;body.useGravity=false;body.isKinematic=true;}
-                item.gameObject.SetActive(true);
                 items.RemoveAt(selected);selected=Mathf.Clamp(selected,0,Mathf.Max(0,items.Count-1));
                 return;
             }

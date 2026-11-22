@@ -55,6 +55,10 @@ public sealed class PuzzleItemGuard : MonoBehaviour
 
             TightenCollider(found.transform);
             KeepOutOfPanels(found.transform);
+            // 玩偶是“摆好等着被捡”的静物：刚体必须冻住。
+            // 之前它们是普通刚体，开柜门时门扇一扫就会把玩偶顶飞到柜子深处/柜缝里，
+            // 玩家再打开柜子就“看不见”了 —— 而且每次开门的时机不同，所以是“有时候”出问题。
+            Freeze(found.transform);
 
             entries.Add(new Entry
             {
@@ -115,6 +119,23 @@ public sealed class PuzzleItemGuard : MonoBehaviour
 
     // ---------- 碰撞体 ----------
 
+    /// <summary>
+    /// 把玩偶的刚体冻成静态：位置只由我们自己控制，不会因为柜门扫到、地板抖动、
+    /// 或者别的东西碰一下就滚走 / 掉到柜子底下（那样玩家就再也找不到它了）。
+    /// 被玩家捡起、丢弃的逻辑走 PlayerInventory，不受影响。
+    /// </summary>
+    static void Freeze(Transform t)
+    {
+        foreach (var body in t.GetComponentsInChildren<Rigidbody>(true))
+        {
+            if (!body) continue;
+            body.velocity = Vector3.zero;
+            body.angularVelocity = Vector3.zero;
+            body.useGravity = false;
+            body.isKinematic = true;
+        }
+    }
+
     /// <summary>碰撞体按渲染包围盒收紧（原来的盒子和模型经常对不上，容易隔着柜门就拾取到）。</summary>
     static void TightenCollider(Transform t)
     {
@@ -164,7 +185,13 @@ public sealed class PuzzleItemGuard : MonoBehaviour
             else union.Encapsulate(panel);
         }
         if (panels.Count == 0) return;
-        if (!union.Intersects(doll)) return;      // 没跟柜板穿插就别动它，别把摆好的玩偶挪偏
+        if (!union.Intersects(doll))
+        {
+            // 没跟柜板穿插，但可能“躲在柜子端板后面”：这种位置开门也永远看不见，
+            // 单独处理一下（只做横向平移，不动高度）。
+            PullIntoDoorSpan(t, doll, union, panels[0]);
+            return;      // 没跟柜板穿插就别动它，别把摆好的玩偶挪偏
+        }
 
         Vector3 outward = panels[0].PickOutwardByClearance();
         Vector3 axis = Vector3.ProjectOnPlane(outward, Vector3.up);
@@ -204,6 +231,40 @@ public sealed class PuzzleItemGuard : MonoBehaviour
         if (!moved) return;
         if (union.Intersects(RecalcBounds(t, doll))) { t.position = original; return; }
         Debug.Log("[玩偶兜底] " + t.name + " 和柜门板穿插，已往柜子里面挪开。", t);
+    }
+
+    /// <summary>
+    /// 玩偶落在“柜子端板（或侧板）和墙之间的窄缝”里 —— 从外面看明明在柜子里，
+    /// 但不管开哪扇柜门都看不见它。判据：在门板后方 0.65m 以内、横向却超出这排柜门的范围。
+    /// 命中就横向拉回到柜门范围内（只平移，不抬不降），让玩家开门就能看到。
+    /// </summary>
+    void PullIntoDoorSpan(Transform t, Bounds doll, Bounds union, FurnitureOpenable reference)
+    {
+        Vector3 outward = reference.PickOutwardByClearance();
+        outward.y = 0f;
+        if (outward.sqrMagnitude < .01f) return;
+        outward.Normalize();
+
+        // 玩偶在门板后面（柜内）多少 —— 只有“在柜内且不太深”才处理
+        float behind = Vector3.Dot(union.center - doll.center, outward);
+        if (behind < -.02f || behind > .65f) return;
+
+        Vector3 lateral = Vector3.Cross(Vector3.up, outward).normalized;
+        float lo = MinAlong(union, lateral) + .08f;
+        float hi = MaxAlong(union, lateral) - .08f;
+        float dlo = MinAlong(doll, lateral);
+        float dhi = MaxAlong(doll, lateral);
+        if (dlo >= lo - .01f && dhi <= hi + .01f) return;    // 本来就在柜门范围内
+
+        float shift;
+        if (dhi < lo) shift = lo - dhi;
+        else if (dlo > hi) shift = hi - dlo;
+        else return;                                          // 跨在边界上，别硬塞
+        if (Mathf.Abs(shift) > .45f) return;
+
+        t.position += lateral * shift;
+        Debug.Log("[玩偶兜底] " + t.name + " 躲在柜子端板后面，已横向挪回柜门范围内（"
+            + shift.ToString("F3") + "m）。", t);
     }
 
     static Bounds RecalcBounds(Transform t, Bounds fallback)

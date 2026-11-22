@@ -1,11 +1,12 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
 /// <summary>
 /// 二楼二号房间的“整理与归位”谜题（第四个任务）。
-/// 玩家用钥匙打开二号房门后开始：弹出三段目标提示 → 椅子 / 相册 / 笔记本电脑 / 茶杯
-/// 四件东西上暗蓝色提示光 → 全部归位后小房间门自动打开 → 走进小房间触发最终独白。
+/// 玩家用钥匙打开二号房门后开始：弹出三段目标提示 → 椅子 / 相框 / 笔记本电脑 / 茶杯
+/// 四件东西上暗蓝色提示光 → 全部归位后小房间门自动打开 →
+/// 小房间书桌上的碎片④带一圈黄色描边，捡起后由 StoryProgress 收尾（恭喜 + 前往一楼客厅）。
 /// 全部在运行时装配，不改场景文件。
 /// </summary>
 [DisallowMultipleComponent]
@@ -28,11 +29,10 @@ public sealed class Room2Tidy : MonoBehaviour
     readonly List<Item> items = new List<Item>();
     Transform smallDoor;
     Vector3 smallDoorCheck;
-    bool begun, finished, entered, fragmentTaken;
+    bool begun, finished;
 
-    // 小房间里那张纸（信封碎片④）与它的指引光
+    // 小房间里那张纸（信封碎片④）：只挂黄色描边，没有灯
     Transform roomFragment;
-    Light fragmentGlow;
 
     public bool Solved => finished;
 
@@ -63,14 +63,15 @@ public sealed class Room2Tidy : MonoBehaviour
             PreparePush(chair);
         }
 
-        // ② 相册：直接用场景里现成的那只相框摆件（SM_Photo_A4，二楼二号房间地毯上那一只），
-        //    不再 clone 一个新的 —— 自己造出来的那个位置和玩家看到的实物对不上。
-        var photo = FindPhoto();
+        // ② 相框：直接用场景里摆在沙发边地上的 SM_Photo_A48，不再复制网格另造一个
+        var photo = FindSceneObject("SM_Photo_A48");
+        if (!photo) photo = CreatePhoto(new Vector3(-21.35f, 3.212f, -102.30f));
         if (photo)
         {
             // 从空壳父级里拆出来：之后按世界坐标搬动、放置，不会被父级缩放带歪
             photo.SetParent(null, true);
-            Add("photo", "相册", photo, new Vector3(-16.5580f, 4.3722f, -104.7070f), photo.rotation, false);
+            var photoSpot = DeskRightSpot(photo, out var photoFacing);
+            Add("photo", "相框", photo, photoSpot, photoFacing, false);
             PreparePickup(photo, .22f);
         }
         else Debug.LogWarning("[整理谜题] 没找到场景里的 SM_Photo_A4，相册这件跳过。", this);
@@ -90,6 +91,11 @@ public sealed class Room2Tidy : MonoBehaviour
             Add("mug", "茶杯", mug, new Vector3(-17.0680f, 3.9819f, -105.9070f), Quaternion.identity, false);
             PreparePickup(mug);
         }
+
+        // 四件东西统一保证有蓝色描边（相框是场景里的普通摆件，原本没有描边；
+        // 椅子 / 笔记本 / 茶杯身上已经带着场景里的描边，这里不重复改它们的参数）。
+        foreach (var item in items) EnsureOutline(item.target);
+        if (photo) EnsureOutline(photo, true);   // 相框强制刷成和其它三个一样的蓝色描边
 
         // 三个“放置点”交互盒
         foreach (var item in items)
@@ -114,12 +120,29 @@ public sealed class Room2Tidy : MonoBehaviour
         pick.displayName = "信封碎片④";
         pick.storyId = "letter_fragment_4";
         pick.itemType = "信封碎片";
-        pick.description = "在小房间桌面上找到的一页信，边角被摩挲得有点毛。";
+        pick.description = "在小房间书桌上找到的一页信，边角被摩挲得有点毛。";
 
-        if (!roomFragment.GetComponent<EnvelopeFragment>())
-            roomFragment.gameObject.AddComponent<EnvelopeFragment>();
+        // 碎片④ 自己的名字和内容：不写这两行的话会沿用 EnvelopeFragment 的默认值，
+        // 捡起来会被当成「信封碎片①」，还会再把“去 1 号门”的目标弹一遍。
+        var fragment = roomFragment.GetComponent<EnvelopeFragment>();
+        if (!fragment) fragment = roomFragment.gameObject.AddComponent<EnvelopeFragment>();
+        fragment.fragmentName = "信封碎片④";
+        fragment.text = "我希望家里永远是干干净净的！";
 
         EnsureCollider(roomFragment, .18f, .06f);
+        // 只要一圈黄色描边，不打任何点光：之前那盏“碎片指引光”在书架格里烧成一团白，
+        // 纸面内容完全看不见。
+        EnsureFragmentOutline(roomFragment);
+    }
+
+    /// <summary>碎片（小房间里那张纸）的黄色描边。</summary>
+    static void EnsureFragmentOutline(Transform target)
+    {
+        if (!target) return;
+        var outline = target.GetComponent<ProximityOutline>();
+        if (!outline) outline = target.GetComponentInChildren<ProximityOutline>(true);
+        if (!outline) outline = target.gameObject.AddComponent<ProximityOutline>();
+        outline.Apply(new Color(1f, .80f, .24f, .88f), .016f, 6f);
     }
 
     void Add(string id, string label, Transform target, Vector3 position, Quaternion rotation, bool pushOnly)
@@ -217,44 +240,192 @@ public sealed class Room2Tidy : MonoBehaviour
     }
 
     /// <summary>
-    /// 二楼二号房间里那只相框摆件。场景里 SM_Photo_A4 这个名字被用了十几次（满地都是同款小相框），
-    /// 所以按“在二楼地板高度 + 离原先那处地毯最近”来认，不能光看名字。
+    /// 用场景里现成的相框网格拼一个“掉落在地上的相册”。
+    ///
+    /// 不能直接 Instantiate 墙上的相框：那些相框是预制体实例的深层子物体，
+    /// 把它们单独复制出来会丢掉父级的缩放 / 轴心偏移 —— 复制品要么小得看不见、
+    /// 要么飞到别处去，而碰撞盒是按真实包围盒算的，于是玩家“看得见却点不到”。
+    /// 这里改成只借 sharedMesh / sharedMaterials，自己搭一个干净的层级：
+    ///   相册（根，PickupItem + BoxCollider + 描边）
+    ///     └ frame（MeshFilter + MeshRenderer，本地原点压在网格中心）
+    /// 这样根节点的位置就是相框的几何中心，碰撞盒、描边、拾取范围三者必然对齐。
     /// </summary>
-    static Transform FindPhoto()
+    static Transform CreatePhoto(Vector3 position)
     {
-        var preferred = new Vector3(-19.57f, 3.30f, -105.21f);
-        Transform best = null;
-        float bestDistance = 3.0f;
+        Mesh mesh = null;
+        Material[] materials = null;
+        foreach (var filter in Object.FindObjectsOfType<MeshFilter>())
+        {
+            if (!filter.sharedMesh) continue;
+            string name = filter.sharedMesh.name;
+            if (name != "SM_Photo_A4B" && name != "SM_Photo_A4" && name != "SM_Photo_A5") continue;
+            var sourceRenderer = filter.GetComponent<MeshRenderer>();
+            if (!sourceRenderer) continue;
+            mesh = filter.sharedMesh;
+            materials = sourceRenderer.sharedMaterials;
+            if (name == "SM_Photo_A4B") break;
+        }
+        if (!mesh)
+        {
+            Debug.LogWarning("[整理谜题] 场景里没找到相框网格，相册这件先跳过。");
+            return null;
+        }
 
+        var root = new GameObject("相册");
+        root.layer = 0;                                   // 确保不会被“忽略射线”那一层藏掉
+        root.transform.position = position;
+        // 面朝上、稍微偏一点角度：像被人随手放在地上的相框。
+        // 绕 X 转 -90°：网格的正面(+Z)朝上；转 +90° 会正面朝下、只看见背板。
+        root.transform.rotation = Quaternion.Euler(-90f, 22f, 0f);
+
+        // 有的 FBX 把顶点按厘米存，网格会大出 100 倍。超过 1.2m 就按比例缩回来，
+        // 免得生出一个几十米大的“相册”，碰撞盒也大得离谱。
+        float extent = Mathf.Max(mesh.bounds.size.x, Mathf.Max(mesh.bounds.size.y, mesh.bounds.size.z));
+        float scale = extent > 1.2f ? 1.2f / extent : 1f;
+
+        var visual = new GameObject("frame");
+        visual.layer = 0;
+        visual.transform.SetParent(root.transform, false);
+        visual.transform.localRotation = Quaternion.identity;
+        visual.transform.localScale = Vector3.one * scale;
+        // mesh 的顶点中心常常不在原点：把网格中心挪到本地原点，
+        // 根节点的 position 就等于相框的几何中心了。
+        visual.transform.localPosition = -mesh.bounds.center * scale;
+
+        var meshFilter = visual.AddComponent<MeshFilter>();
+        meshFilter.sharedMesh = mesh;
+        var meshRenderer = visual.AddComponent<MeshRenderer>();
+        meshRenderer.sharedMaterials = materials;
+
+        // 落到地面上：从生成点上方往下打一条射线，把相框底面正好压在落地高度。
+        // （这时候还没加碰撞体，射线只会打到地板，不会打到相框自己。）
+        Bounds bounds = BoundsOf(root.transform);
+        if (Physics.Raycast(position + Vector3.up * .6f, Vector3.down, out var ground, 1.6f,
+                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            root.transform.position += Vector3.up * (ground.point.y + .004f - bounds.min.y);
+
+        Debug.Log("[整理谜题] 相册已生成在 " + root.transform.position.ToString("F2")
+            + "，网格 " + mesh.name + "，尺寸 " + BoundsOf(root.transform).size.ToString("F3"));
+        return root.transform;
+    }
+
+    static Bounds BoundsOf(Transform t)
+    {
+        var renderers = t.GetComponentsInChildren<Renderer>(true);
+        if (renderers.Length == 0) return new Bounds(t.position, Vector3.zero);
+        Bounds bounds = renderers[0].bounds;
+        for (int i = 1; i < renderers.Length; i++) bounds.Encapsulate(renderers[i].bounds);
+        return bounds;
+    }
+
+    static Transform FindSceneObject(string name)
+    {
+        foreach (var t in AllTransforms())
+            if (t.name == name) return t;
+        return null;
+    }
+
+    /// <summary>场景里那张带显示器的大工作桌（靠北墙）。</summary>
+    static Transform FindWorkingDesk()
+    {
+        Transform best = null;
+        float bestDistance = 3f;
+        var near = new Vector3(-18.28f, 3.99f, -106.5f);
         foreach (var t in AllTransforms())
         {
-            if (t.name != "SM_Photo_A4") continue;
-            var r = t.GetComponent<Renderer>();
-            if (!r) continue;
-            Bounds b = r.bounds;
-            if (b.center.y < 2.95f || b.center.y > 3.65f) continue;     // 只要二楼地板上的
-            if (b.size.magnitude < .12f || b.size.magnitude > .8f) continue;
-            float d = Vector3.Distance(b.center, preferred);
-            if (d >= bestDistance) continue;
-            bestDistance = d;
+            if (t.name.IndexOf("WorkingTable_A1", System.StringComparison.OrdinalIgnoreCase) < 0) continue;
+            if (t.GetComponentsInChildren<Renderer>().Length == 0) continue;
+            var bounds = BoundsOf(t);
+            if (bounds.size.x < 1f) continue;                 // 小边桌不参与
+            float distance = Vector3.Distance(bounds.center, near);
+            if (distance >= bestDistance) continue;
+            bestDistance = distance;
             best = t;
         }
         return best;
     }
 
+    /// <summary>
+    /// 相框的归位点：工作桌的右侧。
+    /// “右侧”按玩家站在桌前、面朝里（世界 -Z）来算 —— 这时右手边是世界 -X，
+    /// 也就是桌子包围盒 min.x 那一端。高度用桌面实测值 + 相框自身“根节点到底边”的距离，
+    /// 所以不论网格轴心在底边还是中心，放上去都正好立在桌面上。
+    /// </summary>
+    static Vector3 DeskRightSpot(Transform photo, out Quaternion rotation)
+    {
+        rotation = photo.rotation;                  // 沿用场景里的朝向，摆上桌不会突然翻面
+        float lift = photo.position.y - BoundsOf(photo).min.y;
+        if (lift < 0f || lift > 1.2f) lift = 0f;
+
+        var desk = FindWorkingDesk();
+        if (!desk)
+        {
+            Debug.LogWarning("[整理谜题] 没找到工作桌，相框归位点退回默认位置。");
+            return new Vector3(-19.05f, 3.982f + lift + .004f, -106.45f);
+        }
+
+        var bounds = BoundsOf(desk);
+        float top = bounds.max.y;
+        float x = bounds.min.x + .24f;
+        float z = bounds.center.z + .04f;
+        for (int i = 0; i < 5; i++)
+        {
+            if (Physics.Raycast(new Vector3(x, top + .45f, z), Vector3.down, out var hit, 1.2f,
+                    Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)
+                && hit.normal.y > .6f)
+            {
+                top = hit.point.y;
+                break;
+            }
+            x += .12f;                              // 打到桌沿外面了，往里挪一点再试
+        }
+
+        var spot = new Vector3(x, top + lift + .004f, z);
+        Debug.Log("[整理谜题] 相框归位点 " + spot.ToString("F3") + "（工作桌 " + desk.name
+            + "，包围盒 " + bounds.min.ToString("F2") + " ~ " + bounds.max.ToString("F2") + "）");
+        return spot;
+    }
+
+    /// <summary>
+    /// 保证目标身上有一圈蓝色描边（和场景里椅子 / 笔记本 / 茶杯自带的那套参数一致）。
+    /// 注意：描边材质是在 OnEnable 里按当时的字段建的，加完必须走 Apply 才会用新颜色。
+    /// force = true 时，即使身上已经挂着描边也把参数刷成这一套（相框用）。
+    /// </summary>
+    static void EnsureOutline(Transform target, bool force = false)
+    {
+        if (!target) return;
+        var outline = target.GetComponent<ProximityOutline>();
+        if (!outline) outline = target.GetComponentInChildren<ProximityOutline>(true);
+        if (!outline)
+        {
+            outline = target.gameObject.AddComponent<ProximityOutline>();
+            force = true;                          // 新加的组件材质还没建，必须 Apply 一次
+        }
+        else if (!force) return;                   // 椅子 / 笔记本 / 茶杯原本就有，别动它们的参数
+        outline.Apply(new Color(.25f, .9f, 1f, .9f), .018f, 2.6f);
+    }
+
     // ---------------- 提示光 ----------------
 
+    /// <summary>
+    /// 待归位物品的“暗蓝提示光”。
+    /// 亮度/范围都压得很低：屋里本来就暗，一盏 0.85 / 1.9m 的点光会把沙发和地板
+    /// 烧成一团白蓝色（相册那张截图就是），反而看不出东西的形状。
+    /// 现在只负责“让物件周围不至于全黑”，找东西主要靠描边。
+    /// </summary>
     static GameObject CreateGlow(Transform target, float height, float range)
     {
         var host = new GameObject("暗蓝提示光");
         host.transform.SetParent(target, false);
-        host.transform.localPosition = new Vector3(0f, height, 0f);
+        // 目标可能被旋转过（相册是平放在地上的），用世界坐标放到正上方，
+        // 否则 localPosition 会跟着旋转跑到旁边去。
+        host.transform.position = target.position + Vector3.up * height;
 
         var light = host.AddComponent<Light>();
         light.type = LightType.Point;
         light.color = new Color(.36f, .52f, 1f);
         light.range = range;
-        light.intensity = .85f;
+        light.intensity = .12f;
         light.shadows = LightShadows.None;
         return host;
     }
@@ -272,14 +443,14 @@ public sealed class Room2Tidy : MonoBehaviour
         {
             story.Enqueue("二楼二号房间", "里面的谜题好像和整理与归位有关。");
             story.Enqueue("房间整理谜题", "我希望家里永远是干干净净的，我需要把二楼二号房间整理干净。");
-            story.Enqueue("温馨提醒", "需要把椅子、相册、笔记本电脑、茶杯归位。");
+            story.Enqueue("温馨提醒", "需要把椅子、相框、笔记本电脑、茶杯归位。");
         }
 
         foreach (var item in items)
         {
             if (item.placed || !item.target) continue;
             float height = item.id == "chair" ? .55f : .12f;
-            float range = item.id == "chair" ? 1.9f : 1.1f;
+            float range = item.id == "chair" ? .95f : .55f;
             item.glow = CreateGlow(item.target, height, range);
         }
     }
@@ -304,57 +475,8 @@ public sealed class Room2Tidy : MonoBehaviour
             }
         }
 
-        // 走进小房间 → 桌上的碎片开始发亮。
-        // 不用“门的位置 + 方向”判断（门的 pivot 在门框顶部，方向很容易搞反），
-        // 直接看玩家离碎片够不够近，语义上也等价于“进到小房间了”。
-        if (finished && !entered && roomFragment)
-        {
-            var player = FindObjectOfType<PlayerController>();
-            if (player && Vector3.Distance(player.transform.position, roomFragment.position) < 3.2f)
-            {
-                entered = true;
-                StartFragmentGlow();
-            }
-        }
-
-        // 碎片被捡走 → 想起一楼的沙发
-        if (entered && !fragmentTaken)
-        {
-            bool picked = !roomFragment || !roomFragment.gameObject.activeInHierarchy;
-            if (picked)
-            {
-                fragmentTaken = true;
-                StopFragmentGlow();
-                StoryProgress.Instance?.EnqueueCenter("内心独白",
-                    "突然想去一楼客厅那里的沙发坐一会了，小时候最喜欢去沙发那个卧着看电视了。");
-            }
-        }
-
-        // 呼吸式的微亮，比常亮更抓眼
-        if (fragmentGlow)
-            fragmentGlow.intensity = .85f + Mathf.Sin(Time.time * 2.4f) * .35f;
-    }
-
-    void StartFragmentGlow()
-    {
-        if (fragmentGlow || !roomFragment) return;
-        var host = new GameObject("碎片指引光");
-        host.transform.SetParent(roomFragment, false);
-        host.transform.localPosition = Vector3.up * .16f;
-        fragmentGlow = host.AddComponent<Light>();
-        fragmentGlow.type = LightType.Point;
-        fragmentGlow.color = new Color(1f, .92f, .64f);
-        fragmentGlow.range = 1.5f;
-        fragmentGlow.intensity = .9f;
-        fragmentGlow.shadows = LightShadows.None;
-        Debug.Log("[整理谜题] 碎片开始发亮：" + roomFragment.name);
-    }
-
-    void StopFragmentGlow()
-    {
-        if (!fragmentGlow) return;
-        Destroy(fragmentGlow.gameObject);
-        fragmentGlow = null;
+        // 走进小房间、捡走碎片之后的提示，交给 StoryProgress.AddFragment("信封碎片④") 排：
+        // 先「碎片四」这一页，再「恭喜完成第四个解密任务」→「请前往一楼客厅…」。
     }
 
     /// <summary>玩家在放置点按 E。</summary>
@@ -407,8 +529,9 @@ public sealed class Room2Tidy : MonoBehaviour
             }
         }
 
-        StoryProgress.Instance?.EnqueueCenter("谜题四完成",
-            "恭喜通关谜题四的房间整理，信封碎片就在小房间中。");
+        // 这里不再弹「谜题四完成」：收尾的“恭喜完成第四个解密任务 / 请前往一楼客厅”
+        // 统一放在捡到碎片④之后（StoryProgress.AddFragment），避免同一件事恭喜两次。
+        Debug.Log("[整理谜题] 四件物品已归位，小房间门已打开。");
     }
 
     // ---------------- 工具 ----------------

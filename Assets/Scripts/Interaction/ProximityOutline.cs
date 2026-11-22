@@ -14,6 +14,33 @@ public sealed class ProximityOutline : MonoBehaviour
     PlayerController player;
     bool visible;
 
+    /// <summary>
+    /// 改颜色 / 粗细 / 可见距离，并且立刻作用到已经建好的描边材质上。
+    ///
+    /// 注意：以前调用方都是 AddComponent 之后再去改这两个 public 字段，
+    /// 可描边材质是在 OnEnable 里按默认值建好的 —— 字段改了材质没改，
+    /// 结果所有“黄色描边”实际都还是默认的青色。要改颜色必须走这里。
+    /// </summary>
+    public void Apply(Color color, float width, float reveal)
+    {
+        outlineColor=color;
+        outlineWidth=Mathf.Clamp(width,.003f,.04f);
+        revealDistance=Mathf.Max(.05f,reveal);
+        // 有些碎片模型上本来就挂着描边（比如密码箱开箱时会把箱子子物体的描边全关掉），
+        // 那就得先打开，否则后面改材质也看不到。
+        if(!enabled)enabled=true;
+        if(outline)
+        {
+            outline.SetColor("_OutlineColor",outlineColor);
+            outline.SetFloat("_OutlineWidth",outlineWidth);
+        }
+        else
+        {
+            // 材质还没建出来（组件是这一帧刚加的）：重走一次 OnEnable 让它按新参数生成。
+            enabled=false;enabled=true;
+        }
+    }
+
     void OnEnable()
     {
         renderers=GetComponentsInChildren<Renderer>(true);
