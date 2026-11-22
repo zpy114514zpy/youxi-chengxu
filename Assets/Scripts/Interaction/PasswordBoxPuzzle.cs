@@ -23,14 +23,8 @@ public sealed class PasswordBoxPuzzle : MonoBehaviour
     [Header("距离")]
     [Tooltip("凳子离箱子的水平距离小于这个值，才算“把凳子推到箱子下面”。")]
     public float stoolRadius = 1.6f;
-    [Tooltip("玩家走到这个范围内、又还够不到时，提示去找凳子。")]
-    public float approachRadius = 3.2f;
-    [Tooltip("房间介绍播完之后，还要在箱子下站这么久才提示找凳子。")]
-    public float hintDelay = .8f;
 
-    bool typing, unlocked, hintedStool, hintedCalendar;
-    float hintDwell;
-    DoorRoomIntro roomDoor;
+    bool typing, unlocked, hintedCalendar;
     string input = "";
     float errorUntil;
     GameObject fragment;
@@ -95,57 +89,7 @@ public sealed class PasswordBoxPuzzle : MonoBehaviour
     {
         if (!player) player = FindObjectOfType<PlayerController>();
         if (typing) { HandleTyping(); return; }
-
-        if (!unlocked && !hintedStool && player) TickStoolHint();
-    }
-
-    /// <summary>
-    /// “或许我需要找一个凳子”的提示：要等房间介绍（开门那页）播完、玩家还站在箱子下面，
-    /// 再停留一小会儿才弹，避免一进门两条 UI 挤在一起。
-    /// </summary>
-    void TickStoolHint()
-    {
-        if (!NeedStool()) { hintDwell = 0f; return; }
-        if (StoryProgress.Instance && StoryProgress.Instance.IsBusy) { hintDwell = 0f; return; }
-
-        hintDwell += Time.deltaTime;
-        // 正常：房间介绍播完后再等 0.8 秒；门没配介绍（或玩家没走开门流程）时兜底等 6.8 秒，
-        // 保证提示不会永远不出现。
-        if (hintDwell < (RoomIntroduced ? hintDelay : hintDelay + 6f)) return;
-        hintedStool = true;
-        StoryProgress.Instance?.EnqueueCenter("提示", "或许我需要找一个凳子。");
-    }
-
-    bool NeedStool()
-    {
-        Vector3 a = player.transform.position, b = transform.position;
-        a.y = b.y = 0f;
-        // 走到箱子下方、但还站在地上、又够不到：需要凳子。
-        return Vector3.Distance(a, b) < approachRadius
-            && player.transform.position.y < transform.position.y - .2f
-            && !CanReach();
-    }
-
-    /// <summary>这间屋子的门有没有已经播过“房间介绍”。场景里没有配介绍的门就当作已介绍，不会卡住提示。</summary>
-    bool RoomIntroduced
-    {
-        get
-        {
-            if (!roomDoor) roomDoor = FindRoomDoor();
-            return !roomDoor || roomDoor.HasIntroduced;
-        }
-    }
-
-    DoorRoomIntro FindRoomDoor()
-    {
-        DoorRoomIntro best = null;
-        float bestDistance = 8f;
-        foreach (var door in FindObjectsOfType<DoorRoomIntro>())
-        {
-            float distance = Vector3.Distance(door.transform.position, transform.position);
-            if (distance < bestDistance) { bestDistance = distance; best = door; }
-        }
-        return best;
+        // 提示不再自己弹：玩家在箱子下面按 E、又够不到时，Interact() 里才给那一条“找凳子”。
     }
 
     // ---------- 密码键盘 ----------

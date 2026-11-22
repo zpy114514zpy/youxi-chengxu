@@ -37,6 +37,9 @@ public sealed class StoryPlacement : MonoBehaviour
     void OnGUI()
     {
         if(filled||!Camera.main)return;
+        // 剧情/提示面板还开着的时候不要叠一条“归位”标签在角落。
+        var story=StoryProgress.Instance;
+        if(story&&story.IsShowingPage)return;
         var player=FindObjectOfType<PlayerController>();
         if(!player||(player.transform.position-transform.position).sqrMagnitude>4f)return;
         StoryPlacement focused=null;float best=float.MaxValue;

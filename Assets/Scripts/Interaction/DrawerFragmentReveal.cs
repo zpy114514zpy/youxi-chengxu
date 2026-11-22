@@ -4,15 +4,16 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 
 // 关卡一收尾：四个玩偶归位、剧情 UI 播完之后，
-// 自动拉开书桌抽屉（Draw 1_low，沿面板法线垂直于桌体滑出），再把信封碎片①（对象007）放进抽屉里，供玩家拾取。
+// 自动拉开书桌【中间】抽屉（模型里的 Draw 1/2/3_low 里正中间那个，沿面板法线垂直于桌体滑出），
+// 再把信封碎片①（对象007）放进抽屉里，加黄色发光描边 + “E 拾取”提示，供玩家拾取。
 [DisallowMultipleComponent]
 public sealed class DrawerFragmentReveal : MonoBehaviour
 {
     [Header("抽屉定位")]
     [Tooltip("场景里作为抽屉句柄的空物体名字。")]
     public string drawerHandleName = "书桌抽屉 1";
-    [Tooltip("抽屉模型节点名（来自家具模型），优先按这个名字找。")]
-    public string drawerMeshName = "Draw 1_low";
+    [Tooltip("抽屉模型节点名的前缀（书桌模型里是 Draw 1_low / Draw 2_low / Draw 3_low，按网格名匹配）。")]
+    public string drawerMeshName = "Draw 2_low";
 
     [Header("开启动画")]
     public float slideDistance = .26f;
@@ -28,6 +29,9 @@ public sealed class DrawerFragmentReveal : MonoBehaviour
     Vector3 fragmentOffset;
     bool placed;
     Coroutine routine;
+    PlayerController player;
+    Light glow;
+    Font font;
 
     /// <summary>由 BedroomToyPuzzle 在谜题解开时调用。</summary>
     public void Begin(GameObject fragmentObject)
@@ -45,6 +49,10 @@ public sealed class DrawerFragmentReveal : MonoBehaviour
         while (waited < uiTimeout && IsUiShowing()) { waited += Time.deltaTime; yield return null; }
         if (delayAfterUi > 0f) yield return new WaitForSeconds(delayAfterUi);
 
+        // 剧情播完、马上要弹抽屉的这一刻，其他房间的门才允许打开
+        // （在这之前一直锁着，防止玩家提前跑进别的房间、打乱顺序）。
+        RoomDoorGate.Unlock();
+
         drawer = ResolveDrawer();
         if (!drawer)
         {
@@ -53,10 +61,14 @@ public sealed class DrawerFragmentReveal : MonoBehaviour
             yield break;
         }
 
-        // 统一交给 FurnitureOpenable 处理：它用“射线测通空 + 朝玩家”判定方向，
-        // 保证剧情打开和玩家手动按 E 走的是同一套逻辑，不会再横向滑出去。
+        // 用抽屉身上的 FurnitureOpenable 做动画（Update 里按 travel 滑出），
+        // 方向则由这里按几何量出来再传进去，避免模型尺寸含糊时横向滑出去。
         var openable = drawer.GetComponent<FurnitureOpenable>();
         if (!openable && handle) openable = handle.GetComponent<FurnitureOpenable>();
+        if (!openable) openable = drawer.GetComponentInParent<FurnitureOpenable>();
+
+        // 中间的抽屉这时才解除剧情锁。
+        if (openable) openable.UnlockByStory();
 
         if (openable)
         {
@@ -64,7 +76,9 @@ public sealed class DrawerFragmentReveal : MonoBehaviour
             openable.enabled = true;
             openable.slide = true;
             openable.speed = .9f;                     // 慢慢拉开，给玩家反应时间
-            openable.Open();
+            // 方向用几何算（抽屉面板朝房间那一侧），不用“水平短轴=进深”的猜测。
+            Vector3 openingDirection = ResolveOpenDirection(drawer);
+            openable.OpenAlong(openingDirection);
 
             float guard = 0f;
             while (guard < 4f && openable && openable.OpenAmount < .995f)
@@ -121,12 +135,61 @@ public sealed class DrawerFragmentReveal : MonoBehaviour
 
         // 纸片很薄，原来的碰撞盒贴着抽屉底，射线经常擦过去 —— 放大到至少 18cm 见方。
         EnsurePickCollider(fragment.transform);
+        EnsureYellowGlow();
 
         fragmentOffset = fragment.transform.position - drawer.position;
         fragment.SetActive(true);
         placed = true;
         if (StoryProgress.Instance) StoryProgress.Instance.RecordClue("书桌抽屉被轻轻拉开，里面压着一张信封碎片。");
         Debug.Log("[抽屉] 信封碎片已放入抽屉：世界坐标 " + fragment.transform.position.ToString("F3"), this);
+    }
+
+    /// <summary>给碎片套一圈暖黄色发光描边，抽屉一拉开就能一眼看到（整间屋子都亮着）。</summary>
+    void EnsureYellowGlow()
+    {
+        if (!fragment) return;
+        var outline = fragment.GetComponent<ProximityOutline>();
+        if (!outline) outline = fragment.AddComponent<ProximityOutline>();
+        outline.outlineColor = new Color(1f, .78f, .16f, 1f);
+        outline.outlineWidth = .022f;
+        outline.revealDistance = 12f;      // 远一点也保持亮着，玩家不会走过了还找不到
+        outline.enabled = true;
+
+        if (glow) return;
+        // 再加一盏小黄灯：抽屉里光线暗，只有描边可能还是不够显眼。
+        var host = new GameObject("碎片指引光");
+        host.transform.position = fragment.transform.position;
+        glow = host.AddComponent<Light>();
+        glow.type = LightType.Point;
+        glow.color = new Color(1f, .86f, .36f);
+        glow.range = 1.1f;
+        glow.intensity = .8f;
+        glow.shadows = LightShadows.None;
+        glow.enabled = false;      // 等碎片真正显示出来再点亮（LateUpdate 里同步）
+    }
+
+    /// <summary>碎片附近给一条“E 拾取”的浮字，配合底部操作条一起提示。</summary>
+    void OnGUI()
+    {
+        if (!placed || !fragment || !fragment.activeSelf) return;
+        var story = StoryProgress.Instance;
+        if (story && story.IsShowingPage) return;
+        var cam = Camera.main;
+        if (!cam) return;
+        if (!player) player = FindObjectOfType<PlayerController>();
+        if (player && (player.transform.position - fragment.transform.position).sqrMagnitude > 36f) return;
+
+        Vector3 screen = cam.WorldToScreenPoint(fragment.transform.position + Vector3.up * .14f);
+        if (screen.z <= 0f) return;
+        if (!font) font = Font.CreateDynamicFontFromOSFont(new[] { "Microsoft YaHei", "SimHei", "Arial" }, 20);
+        var style = new GUIStyle(GUI.skin.box) { font = font, fontSize = 15, alignment = TextAnchor.MiddleCenter };
+        GUI.Box(new Rect(screen.x - 112f, Screen.height - screen.y - 40f, 224f, 30f), "E 拾取 信封碎片①", style);
+    }
+
+    void OnDestroy()
+    {
+        if (glow) Destroy(glow.gameObject);
+        if (font) Destroy(font);
     }
 
     static void EnsurePickCollider(Transform t)
@@ -151,8 +214,13 @@ public sealed class DrawerFragmentReveal : MonoBehaviour
     // 抽屉还能被关回去时，碎片跟着一起动，不会浮在半空。
     void LateUpdate()
     {
-        if (!placed || !drawer || !fragment || !fragment.activeSelf) return;
+        if (!placed || !drawer || !fragment) return;
+        bool visible = fragment.activeSelf;
+        if (glow && glow.enabled != visible) glow.enabled = visible;   // 捡走以后把灯一起关掉
+        if (!visible) return;
         fragment.transform.position = drawer.position + fragmentOffset;
+        if (glow && glow.enabled)
+            glow.transform.position = fragment.transform.position + Vector3.up * .1f;
     }
 
     // ---------- 查找 ----------
@@ -166,14 +234,19 @@ public sealed class DrawerFragmentReveal : MonoBehaviour
     Transform ResolveDrawer()
     {
         Vector3 near = fragment ? fragment.transform.position : transform.position;
+
+        // 1) 书桌模型里有三个抽屉（Draw 1/2/3_low）：剧情只弹开正中间那个。
+        var drawers = FindDeskDrawersNear(near);
+        if (drawers.Count > 0) return drawers[drawers.Count / 2];
+
         handle = FindDeep(drawerHandleName, near);
         if (handle) near = handle.position;
 
-        // 1) 按模型节点名精确匹配（Draw 1_low），并要求尺寸像抽屉。
+        // 2) 按模型节点名精确匹配（Draw 2_low），并要求尺寸像抽屉。
         var byName = FindDeep(drawerMeshName, near);
         if (byName && IsPlausibleDrawer(byName)) return byName;
 
-        // 2) 兜底：从抽屉句柄往上找，但同样必须尺寸像抽屉，避免把整张书桌当成抽屉。
+        // 3) 兜底：从抽屉句柄往上找，但同样必须尺寸像抽屉，避免把整张书桌当成抽屉。
         if (handle)
         {
             var parent = handle.parent;
@@ -181,6 +254,98 @@ public sealed class DrawerFragmentReveal : MonoBehaviour
                 if (IsPlausibleDrawer(parent)) return parent;
         }
         return null;
+    }
+
+    /// <summary>
+    /// 找到 near 附近这张书桌上的所有抽屉，并按“玩家站在书桌前时的从左到右”排序。
+    /// 抽屉是按模型【网格名】认的（Draw 1_low / Draw 2_low / Draw 3_low）：
+    /// 这些名字只在 FBX 的网格上，场景里的 GameObject 不一定叫这个名字，按物体名找会一个都找不到。
+    /// 左右顺序用“抽屉自己的开合方向”推，不依赖书桌 forward 有没有转反。
+    /// </summary>
+    public static List<Transform> FindDeskDrawersNear(Vector3 near, float radius = 6f)
+    {
+        var found = new List<Transform>();
+        foreach (var renderer in FindObjectsOfType<MeshRenderer>())
+        {
+            if (!renderer) continue;
+            var filter = renderer.GetComponent<MeshFilter>();
+            if (!filter || !filter.sharedMesh) continue;
+
+            string mesh = filter.sharedMesh.name;
+            if (string.IsNullOrEmpty(mesh)) continue;
+            if (mesh.IndexOf("_LOD", System.StringComparison.OrdinalIgnoreCase) >= 0) continue;
+            if (!mesh.StartsWith("Draw ", System.StringComparison.OrdinalIgnoreCase)) continue;
+            if (mesh.IndexOf("_low", System.StringComparison.OrdinalIgnoreCase) < 0) continue;
+
+            var t = renderer.transform;
+            if ((BoundsOf(t).center - near).sqrMagnitude > radius * radius) continue;   // 别抓到别的屋子
+            if (!IsPlausibleDrawer(t)) continue;
+            if (!found.Contains(t)) found.Add(t);
+        }
+        if (found.Count <= 1) return found;
+
+        // 同一片区域可能有不止一张桌子：只留离 near 最近那张的抽屉。
+        found.Sort((a, b) => (BoundsOf(a).center - near).sqrMagnitude.CompareTo((BoundsOf(b).center - near).sqrMagnitude));
+        Transform desk = ResolveFurnitureRoot(found[0]);
+        if (desk)
+        {
+            var same = new List<Transform>();
+            foreach (var d in found) if (ResolveFurnitureRoot(d) == desk) same.Add(d);
+            if (same.Count > 0) found = same;
+        }
+
+        Bounds deskBounds = desk ? BoundsOf(desk) : BoundsOf(found[0]);
+        Vector3 forward = Vector3.zero;
+        FurnitureOpenable opener = null;
+        foreach (var d in found)
+        {
+            opener = d.GetComponent<FurnitureOpenable>();
+            if (!opener) opener = d.GetComponentInParent<FurnitureOpenable>();
+            if (opener) break;
+        }
+        forward = opener ? opener.PickOutwardByClearance() : Roomward(desk, deskBounds.center);
+        forward = Vector3.ProjectOnPlane(forward, Vector3.up);
+        if (forward.sqrMagnitude < .0004f) forward = Vector3.forward;
+        forward.Normalize();
+        Vector3 leftAxis = Vector3.Cross(Vector3.up, forward).normalized;   // 玩家面对书桌时的左手方向
+
+        Vector3 center = deskBounds.center;
+        found.Sort((a, b) =>
+            Vector3.Dot(BoundsOf(a).center - center, leftAxis)
+            .CompareTo(Vector3.Dot(BoundsOf(b).center - center, leftAxis)));
+
+        // 正常书桌是横向排的三个抽屉；万一模型是竖着叠的（左右几乎没差），改成按高度排，
+        // 这样“中间那个”仍然是玩家眼里的正中间。
+        float minSide = float.MaxValue, maxSide = float.MinValue;
+        foreach (var d in found)
+        {
+            float side = Vector3.Dot(BoundsOf(d).center - center, leftAxis);
+            if (side < minSide) minSide = side;
+            if (side > maxSide) maxSide = side;
+        }
+        if (maxSide - minSide < .3f)
+            found.Sort((a, b) => BoundsOf(a).center.y.CompareTo(BoundsOf(b).center.y));
+        return found;
+    }
+
+    /// <summary>书桌正面（朝房间）的方向：两侧比射线通空度，更空那侧就是房间。</summary>
+    static Vector3 Roomward(Transform desk, Vector3 center)
+    {
+        Vector3 forward = desk ? Vector3.ProjectOnPlane(desk.forward, Vector3.up) : Vector3.forward;
+        if (forward.sqrMagnitude < .0004f) forward = Vector3.forward;
+        forward.Normalize();
+        if (Clearance(center, -forward) > Clearance(center, forward)) forward = -forward;
+        return forward;
+    }
+
+    static float Clearance(Vector3 origin, Vector3 dir)
+    {
+        const float max = 2.5f;
+        var hits = Physics.RaycastAll(origin + dir * .05f, dir, max, ~0, QueryTriggerInteraction.Ignore);
+        float best = max;
+        foreach (var h in hits)
+            if (h.collider && h.distance > .02f && h.distance < best) best = h.distance;
+        return best;
     }
 
     // 抽屉应该是“一小块”家具：有渲染器、包围盒明显小于整件家具。
