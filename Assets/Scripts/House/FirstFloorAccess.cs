@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// 一楼可走的地面 + “掉到地板下面”的兜底。
@@ -27,6 +27,7 @@ public sealed class FirstFloorAccess : MonoBehaviour
     static void Boot()
     {
         // 只在这栋二层住宅里装配（有一号门），别的关卡不掺和。
+        if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name != "Level 1") return;   // Level 2 有自己的整套流程，别把第一关的谜题装进去
         if (!GameObject.Find("BP_Door_Inside_A5")) return;
         if (FindObjectOfType<FirstFloorAccess>()) return;
         var host = new GameObject("一楼地板安全层");

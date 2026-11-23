@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 [DefaultExecutionOrder(-30)]
@@ -30,6 +30,9 @@ public sealed class StoryProgress : MonoBehaviour
     Texture2D opening, detail, guide, pillOn, pillHover, pillOff;
     Font font;
     bool lampIntroShown, cursorReleased;
+    // 第二关有自己的叙事 UI（Level2Ui）。这个组件仍然留着一个 Instance 给别人判空，
+    // 但开场页、空格翻页、OnGUI 全部关掉，不然两套 UI 会一起弹。
+    bool storyActive = true;
     PlayerInventory inventory;
     public bool IsReading => reading.HasValue || current.HasValue && current.Value.modal;
     // 当前是否还有任意一页剧情/提示正在屏幕上（用来判断玩家是否已经把 UI 跳过）。
@@ -43,6 +46,7 @@ public sealed class StoryProgress : MonoBehaviour
     void Awake()
     {
         Instance=this;
+        storyActive = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name != "Level 2";
         font=Font.CreateDynamicFontFromOSFont(new[]{"Microsoft YaHei","SimHei","Arial"},26);
         opening=Resources.Load<Texture2D>("StoryUI/opening-clean");
         detail=Resources.Load<Texture2D>("StoryUI/detail-clean");
@@ -54,6 +58,7 @@ public sealed class StoryProgress : MonoBehaviour
 
     void Start()
     {
+        if(!storyActive)return;
         AddPages("一封写给未来的信", "小时候的她生活明亮而幸福。她相信长大后的自己会一直快乐，于是把美好的心愿写进一封信，留给未来的自己。", opening, true);
         AddPages("多年以后", "成长带来接连的变故。曾经的期待一点点破碎，她变得疲惫，也不再相信童年写下的那些愿望。", opening, true);
         AddPages("重读旧信", "多年后，她偶然翻出那封尘封的信。稚嫩的字迹仍在祝福未来，却与眼前消沉的自己格格不入。", opening, true);
@@ -238,6 +243,7 @@ public sealed class StoryProgress : MonoBehaviour
 
     void Update()
     {
+        if(!storyActive)return;
         UpdateCursor();                       // 提示页在屏幕上时放开鼠标，方便点“上一步”
         if(pendingBack){pendingBack=false;GoBack();}
         if(UiInputBlocker.Active)return;      // 密码键盘打开时不推进剧情
@@ -310,6 +316,7 @@ public sealed class StoryProgress : MonoBehaviour
 
     void OnGUI()
     {
+        if(!storyActive)return;
         var shown=DisplayedPage;
         if(!shown.HasValue)return;
         var p=shown.Value;

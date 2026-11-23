@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.SceneManagement;
 
 /// <summary>
@@ -76,6 +76,8 @@ public static class RoomDoorGate
 
     static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
+        // 第二关的门全部常开：这道闸门只服务于第一关的剧情顺序。
+        if (scene.name == "Level 2") { unlocked = true; doorTwoLocked = false; return; }
         unlocked = false;
         doorTwoLocked = false;
     }

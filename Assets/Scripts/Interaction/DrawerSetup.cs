@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -21,6 +21,7 @@ public static class DrawerSetup
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Setup()
     {
+        if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name != "Level 1") return;
         if (!GameObject.Find("BP_Door_Inside_A5")) return;
         RemoveBrokenDrawers();
         int added = AttachToPanels();

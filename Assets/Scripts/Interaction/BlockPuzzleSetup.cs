@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -19,6 +19,7 @@ public static class BlockPuzzleSetup
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Setup()
     {
+        if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name != "Level 1") return;
         Transform root = FindBlockRoot();
         if (!root) return;                                  // 不是积木谜题的场景
         if (Object.FindObjectOfType<BlockPuzzle>()) return;  // 已经装配过

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -19,6 +19,7 @@ public static class PasswordPuzzleSetup
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Setup()
     {
+        if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name != "Level 1") return;
         Transform box = Find(BoxName);
         if (!box) return;                       // 不是第三关的场景，直接跳过
 

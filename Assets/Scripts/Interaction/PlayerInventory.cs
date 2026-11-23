@@ -58,9 +58,12 @@ public sealed class PlayerInventory : MonoBehaviour
             var clock=hit.collider.GetComponentInParent<ClockDial>();
             var deposit=hit.collider.GetComponentInParent<FragmentDeposit>();
             var chair=hit.collider.GetComponentInParent<ChairSeat>();
+            // 第二关的所有 E 交互（相框、洗手台、归位点、镜子、盒子）都走这一条。
+            var l2=hit.collider.GetComponentInParent<L2Interactable>();
             if(spot && spot.Prompt.Length==0)spot=null;
             if(chair && chair.Prompt.Length==0)chair=null;
-            if(!placement && !readable && !door && !furniture && !item && !keypad && !stool && !push && !pile && !spot && !clock && !deposit && !chair)continue;
+            if(l2 && l2.Prompt.Length==0)l2=null;
+            if(!placement && !readable && !door && !furniture && !item && !keypad && !stool && !push && !pile && !spot && !clock && !deposit && !chair && !l2)continue;
             // 箱子打开后箱体还会挡住射线：它不再是交互目标，直接跳过，让箱口里的碎片能被瞄准。
             if(keypad && keypad.Unlocked && !item)continue;
             nearest=hit.distance;target=null;prompt="";
@@ -85,6 +88,7 @@ public sealed class PlayerInventory : MonoBehaviour
             else if(spot){target=spot;prompt=spot.Prompt;}
             else if(clock){target=clock;prompt=clock.Prompt;}
             else if(deposit){target=deposit;prompt=deposit.Prompt;}
+            else if(l2){target=l2;prompt=l2.Prompt;}
         }
         // 道具优先：站在抽屉/柜子前面时，只要里面那件东西够得着，就按“拾取”而不是“开抽屉”。
         if(reachableItem&&reachableItemDistance<=nearest+.75f)
@@ -131,6 +135,7 @@ public sealed class PlayerInventory : MonoBehaviour
             else if(target is TidySpot tidySpot)tidySpot.Place(this);
             else if(target is ClockDial clockDial)clockDial.Tick();
             else if(target is FragmentDeposit fragmentDeposit)fragmentDeposit.Place();
+            else if(target is L2Interactable l2target)l2target.Interact(this);
         }
     }
     /// <summary>
@@ -144,6 +149,7 @@ public sealed class PlayerInventory : MonoBehaviour
         string id=item.storyId??"";
         if(id.StartsWith("letter_fragment")||id.StartsWith("block_")||id=="room2_key")return true;
         if(id.StartsWith("tidy_"))return true;
+        if(id.StartsWith("l2_"))return true;              // 第二关的道具（相片残片 / 玩偶 / 吉他）
         if(id.Length==0)return false;
         if(placements==null||Time.unscaledTime>placementRefresh)
         {

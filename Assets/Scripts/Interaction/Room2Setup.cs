@@ -19,6 +19,7 @@ public static class Room2Setup
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Setup()
     {
+        if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name != "Level 1") return;   // Level 2 复用同一栋房子，必须靠场景名区分
         if (!GameObject.Find("BP_Door_Inside_A5")) return;   // 只在这栋二层住宅里装配
 
         Transform roomDoor = FindByName(RoomDoorName);

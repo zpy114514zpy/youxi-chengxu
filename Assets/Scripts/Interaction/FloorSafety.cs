@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// 二楼地面的“安全层”：在二楼房间里铺一层看不见的碰撞板。
@@ -15,6 +15,7 @@ public sealed class FloorSafety : MonoBehaviour
     static void Boot()
     {
         // 只在这栋二层住宅（有一号门）里装配，其它关卡不掺和。
+        if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name != "Level 1") return;
         if (!GameObject.Find("BP_Door_Inside_A5")) return;
         if (FindObjectOfType<FloorSafety>()) return;
         var host = new GameObject("二楼地板安全层");

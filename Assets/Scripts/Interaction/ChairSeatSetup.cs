@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 /// <summary>
 /// 给卧室书桌前那把椅子装上 E 坐下 / Q+WASD 推动。
@@ -9,6 +9,7 @@ public static class ChairSeatSetup
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Setup()
     {
+        if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name != "Level 1") return;
         if (!GameObject.Find("BP_Door_Inside_A5")) return;      // 只在第一关装
 
         var chair = FindDeskChair();
