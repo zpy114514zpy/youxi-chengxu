@@ -4,8 +4,9 @@ using UnityEngine;
 /// <summary>
 /// 谜题一 · 修补全家福。
 /// 二楼二号房间里散着三张相片残片（场景里的 对象002 / 对象003 / 对象004），
-/// 捡齐后到墙上那幅全家福（wall_picture_3）前，按 E 一张一张补回去。
-/// 补完也不会变回鲜艳 —— 只是把轮廓拼回来了，这是这一段的核心表达。
+/// 捡齐后到墙上那幅全家福（wall_picture_3）前，按 E 一块一块补回去 ——
+/// 三块按撕口拼起来正好是一整张全家福，不是三张小图糊上去。
+/// 补完也不会变回鲜艳：只是把轮廓拼回来了，这是这一段的核心表达。
 /// </summary>
 public sealed class Level2PhotoRepair : MonoBehaviour
 {
@@ -14,6 +15,26 @@ public sealed class Level2PhotoRepair : MonoBehaviour
     // 场景里三张残片的节点名（都在 相框/ 下面）。
     static readonly string[] PieceNodes = { "对象002", "对象003", "对象004" };
     static readonly string[] PieceNames = { "相片残片①", "相片残片②", "相片残片③" };
+
+    // 三块残片在整张全家福里的 UV 区间（左, 右, 下, 上），由撕口决定；四周留了 46px 透明边给描边。
+    static readonly Vector4[] PieceUV =
+    {
+        new Vector4(-0.0318f, 1.0318f, 0.3610f, 1.0424f),
+        new Vector4(-0.0318f, 0.5449f, -0.0424f, 0.4687f),
+        new Vector4(0.4655f, 1.0318f, -0.0424f, 0.4687f),
+    };
+
+    // 三块拼好之后，照片在相框上的显示尺寸（相框本身 0.54 宽 × 0.37 高）。
+    const float PhotoW = .38f;
+    const float PhotoH = .285f;
+    // 碎片在房间里时的尺寸（比贴回去大一点，玩家才看得清）。
+    const float SceneW = .46f;
+    const float SceneH = .345f;
+    const float PhotoInset = .035f;      // 从相框中心朝房间里伸出的距离
+
+    // 旧照片的色调：不鲜亮，但也不是全黑。
+    static readonly Color Tint = new Color(.62f, .58f, .52f, 1f);
+    static readonly Color Edge = new Color(.42f, .74f, 1f, 1f);
 
     Level2Ui Ui => Level2Director.Instance ? Level2Director.Instance.Ui : null;
 
@@ -36,19 +57,97 @@ public sealed class Level2PhotoRepair : MonoBehaviour
     {
         for (int i = 0; i < PieceNodes.Length; i++)
         {
-            var t = L2.Find(PieceNodes[i]);
-            if (!t) { Debug.LogWarning("[谜题一] 找不到残片 " + PieceNodes[i]); continue; }
+            var paper = L2.Find(PieceNodes[i]);
+            if (!paper) { Debug.LogWarning("[谜题一] 找不到残片 " + PieceNodes[i]); continue; }
 
             // 已经包过就不再重复包（编辑器里重进 Play 会重跑装配）。
-            if (t.parent && t.parent.name.StartsWith("道具_")) { pieces.Add(t.parent); continue; }
+            if (paper.parent && paper.parent.name.StartsWith("道具_")) { pieces.Add(paper.parent); continue; }
 
-            var host = L2.WrapPickup(t, PieceNames[i], "l2_photo_piece_" + (i + 1), "相片残片",
-                .16f, .05f, "一张泛黄的全家福残片，边角已经磨毛了。");
-            // 房间里本来就散着好几片白纸，残片得在更远处就勾出蓝边，玩家才找得到。
-            if (host) L2.AddBlueOutline(host, L2.OutlineBlue, L2.OutlineWidth, 6.5f);
-            if (host) pieces.Add(host);
+            var pb = L2.BoundsOf(paper);
+            var holder = MakePieceVisual(i, pb);
+            if (!holder) continue;
+
+            // 原来那张白纸只是占位，换成真正的照片碎片。
+            paper.gameObject.SetActive(false);
+
+            var host = L2.WrapPickup(holder, PieceNames[i], "l2_photo_piece_" + (i + 1), "相片残片",
+                .16f, .04f, "一张泛黄的全家福残片，边角已经磨毛了。", false);
+            if (!host) continue;
+
+            pieces.Add(host);
         }
         Debug.Log($"[谜题一] 可拾取残片 {pieces.Count} 张");
+    }
+
+    /// <summary>一块照片碎片：下面一层蓝色描边、上面一层照片，平铺在原地。</summary>
+    Transform MakePieceVisual(int index, Bounds paper)
+    {
+        Vector4 uv = PieceUV[index];
+        float w = SceneW * (uv.y - uv.x);
+        float h = SceneH * (uv.w - uv.z);
+        float[] yaw = { 16f, -24f, 38f };
+
+        var holder = new GameObject("残片视觉_" + (index + 1));
+        holder.transform.SetPositionAndRotation(
+            new Vector3(paper.center.x, paper.max.y + .006f, paper.center.z),
+            Quaternion.Euler(0f, yaw[index], 0f));
+
+        var photoMat = PhotoMaterial("Level2/photo_piece_" + (index + 1), Tint);
+        var glowMat = PhotoMaterial("Level2/photo_piece_" + (index + 1) + "_glow", Color.white, true);
+
+        var glow = MakeQuad("描边", holder.transform, new Vector3(0f, -.0015f, 0f),
+            new Vector2(w, h), glowMat, Quaternion.Euler(-90f, 0f, 0f));
+        var photo = MakeQuad("照片", holder.transform, Vector3.zero,
+            new Vector2(w, h), photoMat, Quaternion.Euler(-90f, 0f, 0f));
+        if (!glow || !photo) return null;
+        return holder.transform;
+    }
+
+    Transform MakeQuad(string name, Transform parent, Vector3 localPos, Vector2 size,
+        Material material, Quaternion localRot)
+    {
+        var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        go.name = name;
+        Object.Destroy(go.GetComponent<Collider>());
+        var t = go.transform;
+        t.SetParent(parent, false);
+        t.localPosition = localPos;
+        t.localRotation = localRot;
+        t.localScale = new Vector3(size.x, size.y, 1f);
+        var r = go.GetComponent<Renderer>();
+        if (material) r.sharedMaterial = material;
+        r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        r.receiveShadows = false;
+        return t;
+    }
+
+    Material PhotoMaterial(string resource, Color tint, bool soft = false)
+    {
+        var tex = Resources.Load<Texture2D>(resource);
+        if (!tex) Debug.LogWarning("[谜题一] 缺贴图 " + resource);
+        var m = L2.Unlit(tint, soft);
+        if (tex)
+        {
+            m.SetTexture("_BaseMap", tex);
+            // 贴回相框时 quad 的 +X 与玩家右手相反，水平翻一次照片才是正着的。
+            m.SetTextureScale("_BaseMap", new Vector2(-1f, 1f));
+            m.SetTextureOffset("_BaseMap", new Vector2(1f, 0f));
+        }
+        if (m.HasProperty("_Cull")) m.SetFloat("_Cull", 0f);
+        if (soft)
+        {
+            // 描边要柔柔地淡出去，走混合；队列压在照片（2450）下面，才不会糊住照片本身。
+            m.renderQueue = 2400;
+        }
+        else
+        {
+            // 撕口是透明通道做的，必须走 AlphaTest，否则整块矩形都会挡住下面的描边。
+            if (m.HasProperty("_AlphaClip")) m.SetFloat("_AlphaClip", 1f);
+            if (m.HasProperty("_Cutoff")) m.SetFloat("_Cutoff", .35f);
+            m.EnableKeyword("_ALPHATEST_ON");
+            m.renderQueue = 2450;
+        }
+        return m;
     }
 
     // ---------------- 相框 ----------------
@@ -114,41 +213,52 @@ public sealed class Level2PhotoRepair : MonoBehaviour
 
     readonly List<Transform> visuals = new List<Transform>();
 
-    /// <summary>把残片贴到相框表面，三片略微错开，看起来是拼回去的。</summary>
-    void AnchorToFrame(Transform piece, int index)
+    /// <summary>把碎片按它在整张照片里的位置贴回相框，三块严丝合缝拼成一张全家福。</summary>
+    void AnchorToFrame(Transform host, int index)
     {
         if (!picture) return;
         var bounds = L2.BoundsOf(picture);
 
+        Vector4 uv = PieceUV[Mathf.Clamp(index, 0, 2)];
+        float w = PhotoW * (uv.y - uv.x);
+        float h = PhotoH * (uv.w - uv.z);
+        float uMid = (uv.x + uv.y) * .5f;
+        float vMid = (uv.z + uv.w) * .5f;
+
         // 相框朝房间的那一面（东墙，法线指向 -X）。
-        Vector3 surface = bounds.center + new Vector3(-(bounds.size.x * .5f + .006f), 0f, 0f);
-        Vector3[] offsets =
-        {
-            new Vector3(0f,  .055f, -.045f),
-            new Vector3(0f, -.045f,  .040f),
-            new Vector3(0f,  .010f, -.005f),
-        };
-        Vector3 target = surface + offsets[Mathf.Clamp(index, 0, 2)];
+        Vector3 face = Vector3.left;
+        Vector3 center = bounds.center + face * PhotoInset;
+        // 玩家朝 +X 看墙时，画面左侧是 +Z，所以 u=0 对应 +Z。
+        Vector3 target = center
+                         + Vector3.up * ((vMid - .5f) * PhotoH)
+                         + Vector3.forward * ((.5f - uMid) * PhotoW);
 
-        piece.SetParent(null, true);
-        piece.gameObject.SetActive(true);
-        piece.position = target;
-        // 纸片本体是平的，正面朝 +Y；这里把它立起来，正面朝房间（-X）。
-        piece.rotation = Quaternion.LookRotation(Vector3.left, Vector3.up);
+        host.SetParent(null, true);
+        host.gameObject.SetActive(true);
+        host.SetPositionAndRotation(target, Quaternion.LookRotation(face, Vector3.up));
+        host.localScale = Vector3.one;
 
-        // 双面显示：碎片翻过来也看得见，不会出现“补了一片却什么都没有”。
-        foreach (var r in piece.GetComponentsInChildren<Renderer>(true))
+        // host → holder → [描边, 照片]：贴到相框后改成正面朝房间，两层前后错开 2mm 防闪烁。
+        var holder = host.childCount > 0 ? host.GetChild(0) : null;
+        if (holder)
         {
-            if (!r) continue;
-            foreach (var m in r.materials)
-                if (m && m.HasProperty("_Cull")) m.SetFloat("_Cull", 0f);
+            holder.localPosition = Vector3.zero;
+            holder.localRotation = Quaternion.identity;
+            holder.localScale = Vector3.one;
+            for (int i = 0; i < holder.childCount; i++)
+            {
+                var q = holder.GetChild(i);
+                q.localRotation = Quaternion.identity;
+                q.localScale = new Vector3(w, h, 1f);
+                q.localPosition = new Vector3(0f, 0f, i == 0 ? 0f : .002f);
+            }
         }
 
-        // 贴到相框上就不再是可拾取的散落物了。
-        foreach (var c in piece.GetComponentsInChildren<Collider>(true)) c.enabled = false;
-        var outline = piece.GetComponentInChildren<ProximityOutline>(true);
+        // 贴回相框后不再是可拾取的散落物。
+        foreach (var c in host.GetComponentsInChildren<Collider>(true)) c.enabled = false;
+        var outline = host.GetComponentInChildren<ProximityOutline>(true);
         if (outline) outline.enabled = false;
-        var pick = piece.GetComponentInChildren<PickupItem>(true);
+        var pick = host.GetComponentInChildren<PickupItem>(true);
         if (pick) pick.enabled = false;
     }
 
@@ -163,12 +273,42 @@ public sealed class Level2PhotoRepair : MonoBehaviour
         ui.Say("新的目标", "我的玩偶与吉他还在这里，我需要把他们放在“二楼一号房间”里。");
 
         if (Level2Director.Instance.Toys) Level2Director.Instance.Toys.Unlock();
+        // 出去外面那扇门，到这刻才开。
+        if (Level2Director.Instance.Doors) Level2Director.Instance.Doors.OpenExit();
     }
 
     public void ReadAgain()
     {
         var ui = Level2Director.Instance ? Level2Director.Instance.Ui : null;
         ui?.Say("全家福", "轮廓拼回来了，颜色还是旧的。\n像被反复折叠过又重新摊平的纸。");
+    }
+
+    // ---------------- 存档 ----------------
+
+    public int PlacedCount => placed;
+
+    /// <summary>
+    /// 读档：把房间里还没捡的残片收起来，再按已经补上的块数把照片重新贴回相框。
+    /// 存档里只记一个数字，画面全部按同一套 UV 重算，不会错位。
+    /// </summary>
+    public void RestoreProgress(int count)
+    {
+        if (count <= 0) return;
+        foreach (var p in pieces)
+            if (p) p.gameObject.SetActive(false);
+
+        for (int i = 0; i < Mathf.Min(count, PieceCount); i++)
+        {
+            var holder = MakePieceVisual(i, new Bounds(Vector3.zero, Vector3.one));
+            if (!holder) continue;
+            var host = new GameObject("已归位残片" + (i + 1));
+            holder.SetParent(host.transform, true);
+            AnchorToFrame(host.transform, i);
+            visuals.Add(host.transform);
+        }
+        placed = Mathf.Min(count, PieceCount);
+        Repaired = placed >= PieceCount;
+        Debug.Log($"[谜题一] 读档恢复：已补 {placed} / {PieceCount} 块");
     }
 
     void Update()

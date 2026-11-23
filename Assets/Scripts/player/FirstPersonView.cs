@@ -31,6 +31,17 @@ public class FirstPersonView : MonoBehaviour
     public void SetPush(PushProp prop) { pushingProp = prop; }
     float crouchOffset, targetCrouchOffset;
     public void SetCrouchOffset(float offset) { targetCrouchOffset = offset; }
+
+    /// <summary>当前的水平视角 / 俯仰（存档、读档用）。</summary>
+    public float Yaw => yaw;
+    public float Pitch => pitch;
+
+    /// <summary>读档时直接把视角摆到存下来的方向，不再从角色根节点的旋转推。</summary>
+    public void SetLook(float yawDegrees, float pitchDegrees = 0f)
+    {
+        yaw = yawDegrees;
+        pitch = Mathf.Clamp(pitchDegrees, -75f, maximumLookDown);
+    }
     Font font;
     Mesh visibleMesh, originalMesh;
     SkinnedMeshRenderer skin;

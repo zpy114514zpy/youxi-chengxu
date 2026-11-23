@@ -78,7 +78,8 @@ public static class L2
     /// 碰撞盒挂在宿主上。这样不管原物体的父级缩放是 0.23 还是 3484，碰撞盒尺寸都对得上。
     /// </summary>
     public static Transform WrapPickup(Transform visual, string displayName, string storyId,
-        string itemType = "道具", float minXZ = .12f, float minY = .06f, string description = "")
+        string itemType = "道具", float minXZ = .12f, float minY = .06f, string description = "",
+        bool withOutline = true)
     {
         if (!visual) return null;
         var bounds = BoundsOf(visual);
@@ -99,7 +100,7 @@ public static class L2
         pick.itemType = itemType;
         pick.description = description;
 
-        AddBlueOutline(host.transform);
+        if (withOutline) AddBlueOutline(host.transform);
         return host.transform;
     }
 
@@ -162,6 +163,65 @@ public static class L2
         r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         r.receiveShadows = false;
         return t;
+    }
+
+    /// <summary>一块单面四边形（Quad 原语），世界尺寸直接给，不依赖父级缩放。</summary>
+    public static Transform Quad(string name, Transform parent, Vector3 worldCenter, Vector2 worldSize,
+        Material material, Quaternion rotation)
+    {
+        var go = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        go.name = name;
+        Object.Destroy(go.GetComponent<Collider>());
+        var t = go.transform;
+        t.SetParent(parent, true);
+        t.SetPositionAndRotation(worldCenter, rotation);
+        t.localScale = new Vector3(worldSize.x, worldSize.y, 1f);
+        var r = go.GetComponent<Renderer>();
+        if (material) r.sharedMaterial = material;
+        r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        r.receiveShadows = false;
+        return t;
+    }
+
+    /// <summary>一个椭圆薄片（镜面用），UV 铺满外接矩形。</summary>
+    public static Transform EllipseDisc(string name, Transform parent, Vector3 center, Vector3 normal,
+        float radiusX, float radiusY, Material material, int segments = 56)
+    {
+        var go = new GameObject(name);
+        var mf = go.AddComponent<MeshFilter>();
+        var mr = go.AddComponent<MeshRenderer>();
+        var mesh = new Mesh { name = name + "_mesh" };
+
+        var verts = new List<Vector3> { Vector3.zero };
+        var uvs = new List<Vector2> { new Vector2(.5f, .5f) };
+        var tris = new List<int>();
+        for (int i = 0; i <= segments; i++)
+        {
+            float a = i / (float)segments * Mathf.PI * 2f;
+            float cx = Mathf.Cos(a), cy = Mathf.Sin(a);
+            verts.Add(new Vector3(cx * radiusX, cy * radiusY, 0f));
+            uvs.Add(new Vector2(.5f + cx * .5f, .5f + cy * .5f));
+            if (i > 0) { tris.Add(0); tris.Add(i); tris.Add(i + 1); }
+        }
+        mesh.SetVertices(verts);
+        mesh.SetUVs(0, uvs);
+        mesh.SetTriangles(tris, 0);
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+        mf.sharedMesh = mesh;
+
+        if (material)
+        {
+            if (material.HasProperty("_Cull")) material.SetFloat("_Cull", 0f);
+            mr.sharedMaterial = material;
+        }
+        mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        mr.receiveShadows = false;
+
+        go.transform.SetParent(parent, true);
+        // 薄片正面是 local +Z，让它朝向 normal
+        go.transform.SetPositionAndRotation(center, Quaternion.LookRotation(normal, Vector3.up));
+        return go.transform;
     }
 
     /// <summary>程序生成一张纯色贴图（UI 底板用）。</summary>

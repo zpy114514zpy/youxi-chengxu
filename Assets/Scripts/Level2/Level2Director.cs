@@ -13,19 +13,33 @@ public sealed class Level2Director : MonoBehaviour
 {
     public static Level2Director Instance { get; private set; }
 
+    /// <summary>读档时由 SaveSystem 在切场景前塞进来，Awake 之后按它恢复进度、不再播开场白。</summary>
+    public static SaveData PendingRestore;
+
     public Level2Ui Ui { get; private set; }
     public Level2PhotoRepair Photo { get; private set; }
     public Level2Toys Toys { get; private set; }
     public Level2Mirror Mirror { get; private set; }
+    public Level2Doors Doors { get; private set; }
     public Transform Player { get; private set; }
 
-    // 出生点：二楼二号房间正中偏南，面朝全家福那面墙。
+    // 出生点：二楼二号房里，沙发旁边那块空地（原来正落在沙发坐垫上）。
     static readonly Vector3 Spawn = new Vector3(-19.7f, 3.95f, -103.6f);
+    const float FloorY = 3.20f;          // 二楼地板高度，站人的基准面
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void Boot()
     {
-        if (SceneManager.GetActiveScene().name != "Level 2") return;
+        // 这个特性只在“游戏启动时”跑一次；读档会重新加载 Level 2，
+        // 所以还要挂上 sceneLoaded，保证每次进第二关都有人把总控建起来。
+        SceneManager.sceneLoaded -= OnSceneLoaded;
+        SceneManager.sceneLoaded += OnSceneLoaded;
+        OnSceneLoaded(SceneManager.GetActiveScene(), LoadSceneMode.Single);
+    }
+
+    static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        if (scene.name != "Level 2") return;
         if (FindObjectOfType<Level2Director>()) return;
         new GameObject("第二关总控").AddComponent<Level2Director>();
     }
@@ -39,11 +53,41 @@ public sealed class Level2Director : MonoBehaviour
         ApplyMood();
 
         Photo = gameObject.AddComponent<Level2PhotoRepair>(); Photo.Setup();
+        Doors = gameObject.AddComponent<Level2Doors>(); Doors.Setup();
         Toys = gameObject.AddComponent<Level2Toys>(); Toys.Setup();
         Mirror = gameObject.AddComponent<Level2Mirror>(); Mirror.Setup();
 
         fogTimer = .4f;
-        Invoke(nameof(Intro), .35f);
+    }
+
+    void Start()
+    {
+        if (PendingRestore != null)
+        {
+            var data = PendingRestore;
+            PendingRestore = null;
+            ApplySave(data);
+        }
+        else Invoke(nameof(Intro), .35f);
+    }
+
+    // ---------------- 存档 ----------------
+
+    public void FillSave(SaveData d)
+    {
+        if (Photo) d.photoPlaced = Photo.PlacedCount;
+        if (Toys) d.toys = Toys.CaptureState();
+        if (Mirror) d.mirrorStage = Mirror.Stage;
+        if (Doors) d.doors = Doors.CaptureState();
+    }
+
+    public void ApplySave(SaveData d)
+    {
+        if (Doors) Doors.RestoreState(d.doors);
+        if (Photo) Photo.RestoreProgress(d.photoPlaced);
+        if (Toys) Toys.RestoreState(d.toys);
+        if (Mirror) Mirror.RestoreStage(d.mirrorStage);
+        Debug.Log($"[第二关] 读档完成：相片 {d.photoPlaced} 块 / 镜子 {d.mirrorStage} / 门 {d.doors}");
     }
 
     // ---------------- 玩家 ----------------
@@ -59,49 +103,110 @@ public sealed class Level2Director : MonoBehaviour
             return;
         }
 
-        Vector3 at = FindFreeSpot(go.transform);
-        Vector3 look = new Vector3(-16.40f, at.y, -105.92f) - at;
+        Vector3 feet = FindFloorSpot(go);
+        Vector3 look = new Vector3(-16.40f, 1.2f, -105.92f) - new Vector3(feet.x, 1.2f, feet.z);
         float yaw = Mathf.Atan2(look.x, look.z) * Mathf.Rad2Deg;
         var rot = Quaternion.Euler(0f, yaw, 0f);
 
+        // 先按“脚踩在地板上”摆一次，再量出模型真正的脚底，把高度补正回来。
+        go.transform.SetPositionAndRotation(new Vector3(feet.x, FloorY, feet.z), rot);
+        Physics.SyncTransforms();
+        float meshFeet = MeshFeetY(go);
+        AlignCapsuleToFeet(go);                       // 胶囊底对齐模型脚底，否则物理会把脚顶进地板
+        float rootY = FloorY + (FloorY - meshFeet);
+        var at = new Vector3(feet.x, rootY, feet.z);
+
         var body = go.GetComponent<Rigidbody>();
-        if (body) { body.position = at; body.rotation = rot; body.velocity = Vector3.zero; }
+        if (body)
+        {
+            body.position = at;
+            body.rotation = rot;
+            body.velocity = Vector3.zero;
+            body.angularVelocity = Vector3.zero;
+        }
         go.transform.SetPositionAndRotation(at, rot);
         Physics.SyncTransforms();
 
         Player = go.transform;
-        Debug.Log($"[第二关] 玩家就位 {L2.Fmt(at)}，朝向 {yaw:F0}°");
+        Debug.Log($"[第二关] 玩家就位 {L2.Fmt(at)}，朝向 {yaw:F0}°，模型脚底 {meshFeet:F3}（地板 {FloorY:F2}）");
         EnsureCamera();
     }
 
-    /// <summary>出生点要留出一人高的空位，不然玩家一进去就被家具顶住。</summary>
-    Vector3 FindFreeSpot(Transform ignore)
+    /// <summary>模型真正踩地的那一层：蒙皮网格的最低点（有阴影片的话一起算，差不了多少）。</summary>
+    static float MeshFeetY(GameObject go)
+    {
+        float min = float.MaxValue;
+        foreach (var sm in go.GetComponentsInChildren<SkinnedMeshRenderer>())
+            if (sm.enabled) min = Mathf.Min(min, sm.bounds.min.y);
+        if (min < float.MaxValue) return min;
+
+        foreach (var r in go.GetComponentsInChildren<Renderer>())
+            if (r.enabled) min = Mathf.Min(min, r.bounds.min.y);
+        return min < float.MaxValue ? min : 0f;
+    }
+
+    /// <summary>
+    /// 这套人物模型的脚底比胶囊底低 14cm，物理把胶囊放在地上时，脚就陷进地板里了。
+    /// 把胶囊往下挪同样的距离，让“胶囊底 = 脚底”，站稳之后脚正好贴在地板上。
+    /// </summary>
+    static void AlignCapsuleToFeet(GameObject go)
+    {
+        var cap = go.GetComponentInChildren<CapsuleCollider>();
+        if (!cap) return;
+
+        float feet = MeshFeetY(go);
+        float gap = cap.bounds.min.y - feet;          // 胶囊底比脚底高多少
+        if (Mathf.Abs(gap) < .02f) return;
+
+        float sy = Mathf.Max(.0001f, Mathf.Abs(cap.transform.lossyScale.y));
+        cap.center -= new Vector3(0f, gap / sy, 0f);
+        Physics.SyncTransforms();
+        Debug.Log($"[第二关] 胶囊底对齐脚底，下移 {gap:F3}m");
+    }
+
+    /// <summary>
+    /// 在沙发旁找一块真正空着的地板：脚下要有二楼地板，且一人高的胶囊不能被家具顶住。
+    /// 优先往玩家右手边（-Z）挪，那块是房间中央的空地。
+    /// </summary>
+    Vector3 FindFloorSpot(GameObject player)
     {
         var offsets = new[]
         {
-            Vector3.zero,
-            new Vector3(0f, 0f, 1.2f), new Vector3(0f, 0f, -1.2f),
-            new Vector3(1.2f, 0f, 0f), new Vector3(-1.2f, 0f, 0f),
-            new Vector3(1.6f, 0f, 1.6f), new Vector3(-1.6f, 0f, -1.6f),
+            new Vector3(0f, 0f, -1.5f), new Vector3(.5f, 0f, -1.5f), new Vector3(-.5f, 0f, -1.5f),
+            new Vector3(1.2f, 0f, -.8f), new Vector3(1.2f, 0f, .6f),
+            new Vector3(-1.2f, 0f, -.8f), new Vector3(0f, 0f, 1.5f),
+            new Vector3(0f, 0f, 2.2f), new Vector3(-1.8f, 0f, -1.8f), new Vector3(1.8f, 0f, -1.8f),
         };
+
         foreach (var o in offsets)
         {
-            Vector3 p = Spawn + o;
-            if (!Physics.Raycast(p + Vector3.up * 2.2f, Vector3.down, out var ground, 4f,
+            var p = new Vector3(Spawn.x + o.x, FloorY, Spawn.z + o.z);
+
+            // 脚下必须是这块地板，不能是沙发、地毯边或楼下的什么东西
+            if (!Physics.Raycast(p + Vector3.up * .45f, Vector3.down, out var ground, .8f,
                     Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)) continue;
-            Vector3 feet = ground.point;
-            Vector3 bottom = feet + Vector3.up * .25f;
-            Vector3 top = feet + Vector3.up * 1.55f;
+            if (Mathf.Abs(ground.point.y - FloorY) > .06f) continue;
+
+            // 一人高的位置不能被家具占着（沙发、扶手椅、书桌都算）
             bool blocked = false;
-            foreach (var c in Physics.OverlapCapsule(bottom, top, .26f, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+            Vector3 low = p + Vector3.up * .18f, high = p + Vector3.up * 1.55f;
+            foreach (var c in Physics.OverlapCapsule(low, high, .27f,
+                         Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
             {
-                if (c.isTrigger) continue;
-                if (ignore && c.transform.IsChildOf(ignore)) continue;   // 玩家自己不算障碍
-                blocked = true; break;
+                if (c.isTrigger || !c.enabled) continue;
+                if (player && c.transform.IsChildOf(player.transform)) continue;
+                if (c.bounds.max.y <= FloorY + .06f) continue;      // 地毯这种贴地薄片不算
+                blocked = true;
+                break;
             }
-            if (!blocked) return new Vector3(p.x, feet.y + (Spawn.y - 3.2f), p.z);
+            if (blocked) continue;
+
+            Debug.Log($"[第二关] 出生点 {L2.Fmt(p)}（偏移 {L2.Fmt(o)}）");
+            return p;
         }
-        return Spawn;
+
+        Debug.LogWarning("[第二关] 没找到空地板，退回房间中央");
+        return new Vector3(Spawn.x, FloorY, Spawn.z - 1.5f);
     }
 
     void EnsureCamera()

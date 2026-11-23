@@ -3,29 +3,30 @@ using UnityEngine;
 
 /// <summary>
 /// 谜题三 · 闭环问答（客厅）。
-/// 客厅中间立着一面落地镜：镜面是真反射（镜像相机 + RenderTexture），
-/// 玩家站在镜子前能看到自己 —— 一个还没长大的自己。
+/// 用的是一楼客厅里那面本来就有的旧穿衣镜（sm_forgottenmirror）：把它的镜面换成
+/// 一块实时反射面（镜像相机 + RenderTexture），玩家站到镜前能看见自己 —— 那个还没长大的自己。
 /// 镜前问答选完 → 桌上那个盒子自己弹开 → 打开盒子读信 → 黑幕白字收束。
 /// </summary>
 public sealed class Level2Mirror : MonoBehaviour
 {
     Level2Ui Ui => Level2Director.Instance ? Level2Director.Instance.Ui : null;
 
-    Transform mirrorPlane, adultLayer;
-    Renderer planeRenderer;
+    Transform mirrorRoot;
+    Transform disc, adultDisc;
+    Renderer discRenderer;
     Camera mirrorCam;
     RenderTexture rt;
-    Material mirrorMaterial, adultMaterial;
+    Material discMaterial, adultMaterial;
     Level2MirrorTalk talk;
     Level2LetterBox box;
+    SkinnedMeshRenderer bodyShadow, bodySkin;
 
-    bool unlocked, talked, answered, letterOpened, finished;
+    Vector3 mirrorCenter, mirrorNormal;
+    float halfW = .21f, halfH = .58f;
+
+    bool unlocked, talked, answered, letterOpened, finished, adultShown;
     public bool Unlocked => unlocked;
     public bool Answered => answered;
-
-    // 客厅中央：沙发在西、电视在东，镜子立在中间偏东，正面朝西（朝沙发那边）。
-    static readonly Vector3 MirrorPos = new Vector3(-19.25f, 0f, -97.95f);
-    const float MirrorYaw = 90f;      // 面朝 -X
 
     public void Setup()
     {
@@ -39,93 +40,232 @@ public sealed class Level2Mirror : MonoBehaviour
         Debug.Log("[谜题三] 已解锁");
     }
 
-    // ---------------- 落地镜 ----------------
+    // ---------------- 客厅那面旧穿衣镜 ----------------
 
     void BuildMirror()
     {
-        // 先落地：从上方打一条射线找一楼地面（脚踩的 0.60）。
-        float floorY = .6f;
-        if (Physics.Raycast(new Vector3(MirrorPos.x, 2.4f, MirrorPos.z), Vector3.down, out var hit, 3f,
-                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
-            floorY = hit.point.y;
+        mirrorRoot = L2.Find("sm_forgottenmirror");
+        if (!mirrorRoot)
+        {
+            Debug.LogWarning("[谜题三] 找不到 sm_forgottenmirror");
+            return;
+        }
 
-        var root = new GameObject("落地镜");
-        root.transform.SetPositionAndRotation(new Vector3(MirrorPos.x, floorY, MirrorPos.z),
-            Quaternion.Euler(0f, MirrorYaw, 0f));
+        if (!MeasureMirror()) return;
 
-        var wood = L2.Unlit(new Color(.20f, .15f, .11f));
-        var woodDark = L2.Unlit(new Color(.12f, .09f, .07f));
-
-        // 外框：两根立柱 + 上下横梁 + 底座，拼一面旧木框镜子。
-        L2.Box("镜框·左", root.transform, Local(root.transform, -.50f, 1.02f, 0f), new Vector3(.08f, 2.04f, .10f), wood, root.transform.rotation);
-        L2.Box("镜框·右", root.transform, Local(root.transform, .50f, 1.02f, 0f), new Vector3(.08f, 2.04f, .10f), wood, root.transform.rotation);
-        L2.Box("镜框·上", root.transform, Local(root.transform, 0f, 2.02f, 0f), new Vector3(1.08f, .10f, .10f), wood, root.transform.rotation);
-        L2.Box("镜框·下", root.transform, Local(root.transform, 0f, .06f, 0f), new Vector3(1.08f, .12f, .10f), wood, root.transform.rotation);
-        L2.Box("镜座", root.transform, Local(root.transform, 0f, .03f, 0f), new Vector3(1.20f, .06f, .42f), woodDark, root.transform.rotation);
-
-        // 镜面：一张离框面 1cm 的薄片，材质挂 RenderTexture。
-        rt = new RenderTexture(768, 1024, 24, RenderTextureFormat.Default) { hideFlags = HideFlags.DontSave };
+        // 反射面：一块椭圆薄片，正好盖在原来的镜面上。
+        int w = 512;
+        int h = Mathf.RoundToInt(w * (halfH * 2f) / Mathf.Max(.01f, halfW * 2f));
+        h = Mathf.Clamp(h, 256, 2048);
+        rt = new RenderTexture(w, h, 24, RenderTextureFormat.Default) { hideFlags = HideFlags.DontSave };
         rt.Create();
 
-        mirrorMaterial = L2.Unlit(Color.white);
-        mirrorMaterial.SetTexture("_BaseMap", rt);
-        FlipV(mirrorMaterial);
-        if (mirrorMaterial.HasProperty("_Cull")) mirrorMaterial.SetFloat("_Cull", 0f);
+        discMaterial = L2.Unlit(Color.white);
+        discMaterial.SetTexture("_BaseMap", rt);
+        // 镜面 quad 的 +X 与玩家右手相反，贴图水平翻一次才是正着的镜子。
+        discMaterial.SetTextureScale("_BaseMap", new Vector2(-1f, 1f));
+        discMaterial.SetTextureOffset("_BaseMap", new Vector2(1f, 0f));
 
-        mirrorPlane = L2.Box("镜面", root.transform, Local(root.transform, 0f, 1.02f, -.045f),
-            new Vector3(.92f, 1.88f, .012f), mirrorMaterial, root.transform.rotation);
-        planeRenderer = mirrorPlane.GetComponent<Renderer>();
-        planeRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        disc = L2.EllipseDisc("镜面", null, mirrorCenter + mirrorNormal * .006f, mirrorNormal,
+            halfW * .985f, halfH * .985f, discMaterial);
+        discRenderer = disc.GetComponent<Renderer>();
+        discRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
         // 镜子里“长大之后”的那个身影：一层贴在镜面前的剪影，默认全透明。
         adultMaterial = L2.Unlit(new Color(1f, 1f, 1f, 0f), transparent: true);
-        adultLayer = L2.Box("镜中人影", root.transform, Local(root.transform, 0f, 1.02f, -.056f),
-            new Vector3(.78f, 1.62f, .004f), adultMaterial, root.transform.rotation);
-        adultLayer.gameObject.SetActive(false);
-        if (Level2Ui.Instance && Level2Ui.Instance.AdultFigure)
-            adultMaterial.SetTexture("_BaseMap", Level2Ui.Instance.AdultFigure);
-        FlipV(adultMaterial);
+        var adultTex = Level2Ui.Instance ? Level2Ui.Instance.AdultFigure : null;
+        if (adultTex)
+        {
+            adultMaterial.SetTexture("_BaseMap", adultTex);
+            adultMaterial.SetTextureScale("_BaseMap", new Vector2(1f, 1f));
+        }
+        adultDisc = L2.EllipseDisc("镜中人影", null, mirrorCenter + mirrorNormal * .012f, mirrorNormal,
+            halfW * .72f, halfH * .80f, adultMaterial);
+        adultDisc.gameObject.SetActive(false);
 
-        // 镜子的碰撞：人不能穿过去。
-        var solid = root.AddComponent<BoxCollider>();
-        solid.center = new Vector3(0f, 1.02f, 0f);
-        solid.size = new Vector3(1.10f, 2.06f, .16f);
-
-        // 交互盒：比镜面稍大，站在镜子前按 E 就能触发。
+        // 交互盒：站在镜子前按 E 就能触发。
         var host = new GameObject("落地镜·交互");
-        host.transform.SetPositionAndRotation(Local(root.transform, 0f, 1.10f, -.30f), Quaternion.Euler(0f, MirrorYaw, 0f));
-        var box = host.AddComponent<BoxCollider>();
-        box.size = new Vector3(1.10f, 2.0f, .60f);
+        host.transform.SetPositionAndRotation(mirrorCenter + mirrorNormal * .55f,
+            Quaternion.LookRotation(mirrorNormal, Vector3.up));
+        var col = host.AddComponent<BoxCollider>();
+        col.size = new Vector3(halfW * 2f + .50f, halfH * 2f, .80f);
 
         talk = host.AddComponent<Level2MirrorTalk>();
         talk.host = this;
 
         // 客厅是整间屋子情绪的落点：给镜前一小片柔和暖光，别让这里冷得像走廊尽头。
         var glow = new GameObject("客厅暖光");
-        glow.transform.SetParent(root.transform, false);
-        glow.transform.position = Local(root.transform, -.55f, 1.85f, -.65f);
+        glow.transform.position = mirrorCenter + mirrorNormal * .7f + Vector3.up * .75f;
         var lamp = glow.AddComponent<Light>();
         lamp.type = LightType.Point;
         lamp.color = new Color(1f, .82f, .60f);
-        lamp.range = 3.4f;
+        lamp.range = 3.2f;
         lamp.intensity = .55f;
         lamp.shadows = LightShadows.Soft;
 
         BuildMirrorCamera();
-        Debug.Log($"[谜题三] 落地镜已立在 {L2.Fmt(root.transform.position)}（地面 y={floorY:F2}）");
+        Debug.Log($"[谜题三] 穿衣镜 中心={L2.Fmt(mirrorCenter)} 法线={L2.Fmt(mirrorNormal)} 尺寸={halfW * 2f:F2}×{halfH * 2f:F2}");
     }
 
-    static Vector3 Local(Transform root, float x, float y, float z) => root.TransformPoint(new Vector3(x, y, z));
-
-    /// <summary>
-    /// Cube 原语的正面 UV 在这块竖着的镜片上是上下颠倒的（RenderTexture 和剪影贴图都跟着翻了）。
-    /// 统一把贴图垂直翻一次，比改网格便宜，也不影响别的物体。
-    /// </summary>
-    static void FlipV(Material m)
+    /// <summary>从镜子里那块 “mirror” 材质的面片量出镜面的中心、朝向和大小。</summary>
+    bool MeasureMirror()
     {
-        if (!m) return;
-        m.SetTextureScale("_BaseMap", new Vector2(1f, -1f));
-        m.SetTextureOffset("_BaseMap", new Vector2(0f, 1f));
+        var mf = mirrorRoot.GetComponent<MeshFilter>();
+        var mr = mirrorRoot.GetComponent<MeshRenderer>();
+        if (!mf || !mr || !mf.sharedMesh) return false;
+
+        var mesh = mf.sharedMesh;
+        var mats = mr.sharedMaterials;
+        int sub = -1;
+        for (int i = 0; i < mats.Length; i++)
+            if (mats[i] && mats[i].name.ToLowerInvariant().Contains("mirror")) { sub = i; break; }
+        if (sub < 0) sub = mesh.subMeshCount - 1;
+
+        var tris = mesh.GetTriangles(sub);
+        var verts = mesh.vertices;
+        if (tris.Length < 3) return false;
+
+        var idx = new HashSet<int>();
+        for (int i = 0; i < tris.Length; i++) idx.Add(tris[i]);
+
+        Vector3 localCenter = Vector3.zero;
+        foreach (var i in idx) localCenter += verts[i];
+        localCenter /= Mathf.Max(1, idx.Count);
+
+        Vector3 a = mirrorRoot.TransformPoint(verts[tris[0]]);
+        Vector3 b = mirrorRoot.TransformPoint(verts[tris[1]]);
+        Vector3 c = mirrorRoot.TransformPoint(verts[tris[2]]);
+        // 前三个顶点可能是退化三角形，取投影面积最大的那一片。
+        Vector3 nrm = Vector3.Cross(b - a, c - a);
+        float bestArea = nrm.sqrMagnitude;
+        for (int i = 0; i + 2 < tris.Length; i += 3)
+        {
+            Vector3 p0 = mirrorRoot.TransformPoint(verts[tris[i]]);
+            Vector3 p1 = mirrorRoot.TransformPoint(verts[tris[i + 1]]);
+            Vector3 p2 = mirrorRoot.TransformPoint(verts[tris[i + 2]]);
+            Vector3 cr = Vector3.Cross(p1 - p0, p2 - p0);
+            if (cr.sqrMagnitude > bestArea) { bestArea = cr.sqrMagnitude; nrm = cr; }
+        }
+
+        mirrorCenter = mirrorRoot.TransformPoint(localCenter);
+        if (nrm.sqrMagnitude < 1e-8f)
+        {
+            Debug.LogWarning("[谜题三] 镜面网格太扁，算不出法线");
+            return false;
+        }
+        nrm.Normalize();
+
+        // 让法线朝向客厅（玩家站的那一边）
+        Vector3 viewer = Level2Director.Instance && Level2Director.Instance.Player
+            ? Level2Director.Instance.Player.position
+            : mirrorCenter + Vector3.right;
+        if (Vector3.Dot(nrm, viewer - mirrorCenter) < 0f) nrm = -nrm;
+        mirrorNormal = nrm;
+
+        Vector3 R = Vector3.Cross(Vector3.up, mirrorNormal).normalized;
+        Vector3 U = Vector3.Cross(mirrorNormal, R).normalized;
+
+        float minR = float.MaxValue, maxR = float.MinValue, minU = float.MaxValue, maxU = float.MinValue;
+        foreach (var i in idx)
+        {
+            Vector3 p = mirrorRoot.TransformPoint(verts[i]);
+            float r = Vector3.Dot(p - mirrorCenter, R);
+            float u = Vector3.Dot(p - mirrorCenter, U);
+            minR = Mathf.Min(minR, r); maxR = Mathf.Max(maxR, r);
+            minU = Mathf.Min(minU, u); maxU = Mathf.Max(maxU, u);
+        }
+
+        halfW = Mathf.Max(.05f, (maxR - minR) * .5f);
+        halfH = Mathf.Max(.05f, (maxU - minU) * .5f);
+        mirrorCenter += R * ((minR + maxR) * .5f) + U * ((minU + maxU) * .5f);
+        return true;
+    }
+
+    void BuildMirrorCamera()
+    {
+        var go = new GameObject("镜面反射相机");
+        mirrorCam = go.AddComponent<Camera>();
+        mirrorCam.enabled = false;                  // 只在需要时手动 Render
+        mirrorCam.targetTexture = rt;
+        mirrorCam.nearClipPlane = .05f;
+        mirrorCam.farClipPlane = 50f;
+        mirrorCam.clearFlags = CameraClearFlags.SolidColor;
+        mirrorCam.backgroundColor = new Color(.04f, .045f, .055f);
+        go.transform.SetParent(transform, false);
+    }
+
+    void LateUpdate()
+    {
+        if (!mirrorCam || !disc || !Camera.main) return;
+        var viewer = Camera.main.transform;
+        if ((viewer.position - mirrorCenter).sqrMagnitude > 400f) return;   // 离得远就不渲染
+
+        Vector3 N = mirrorNormal;
+        float side = Vector3.Dot(N, viewer.position - mirrorCenter);
+        if (side < .05f) return;                                            // 人不在镜子正面
+
+        // 镜子该显示的是“玩家眼睛看到的那一面”：把玩家相机整个镜过去。
+        Vector3 camPos = mirrorCenter + Vector3.Reflect(viewer.position - mirrorCenter, N);
+
+        // 视线别照着镜子的法线走：这面穿衣镜是往前倾的，纯反射轴会把人顶出画面。
+        // 直接瞄准玩家本人的包围盒中心 —— 角色的动画姿态会让身体偏离根节点十几到三十厘米，
+        // 用根节点当目标会让镜子里的自己一直贴在镜边。
+        if (!bodySkin) bodySkin = FindBodySkin();
+        Vector3 target = bodySkin ? bodySkin.bounds.center : viewer.position;
+        Vector3 aim = new Vector3(target.x, Mathf.Lerp(target.y, viewer.position.y - .30f, .35f), target.z);
+        Vector3 dir = aim - camPos;
+        if (dir.sqrMagnitude < .001f) return;
+        mirrorCam.transform.SetPositionAndRotation(camPos, Quaternion.LookRotation(dir, Vector3.up));
+
+        // 框住整块镜面，再往里收一点：镜面窄，人物在镜子里才不至于太小。
+        float dist = Mathf.Max(.20f, Vector3.Distance(camPos, mirrorCenter));
+        float vfov = 2f * Mathf.Atan(halfH * .84f / dist) * Mathf.Rad2Deg;
+        mirrorCam.fieldOfView = Mathf.Clamp(vfov, 25f, 95f);
+        // 近裁剪面推到镜面之后：镜框、镜面网格都在这个平面之前，一律不参与反射。
+        mirrorCam.nearClipPlane = Mathf.Max(.05f, dist - .04f);
+
+        // 渲染反射时必须把这块镜子自己藏起来，否则镜后相机会先撞上镜面网格的背面。
+        var rootRenderer = mirrorRoot ? mirrorRoot.GetComponent<Renderer>() : null;
+        if (rootRenderer) rootRenderer.enabled = false;
+        if (discRenderer) discRenderer.enabled = false;
+        if (adultDisc) adultDisc.gameObject.SetActive(false);
+
+        // 第一人称把头藏了，镜子里只会剩一个没有头的身体。借“只有影子”的那份完整网格，
+        // 只在镜像相机渲染的这一瞬把它露出来 —— 主相机永远看不到它。
+        if (!bodyShadow) bodyShadow = FindBodyShadow();
+        var prevMode = UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly;
+        if (bodyShadow)
+        {
+            prevMode = bodyShadow.shadowCastingMode;
+            bodyShadow.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+        }
+
+        mirrorCam.Render();
+
+        if (bodyShadow) bodyShadow.shadowCastingMode = prevMode;
+        if (rootRenderer) rootRenderer.enabled = true;
+        if (discRenderer) discRenderer.enabled = true;
+        if (adultDisc && adultShown) adultDisc.gameObject.SetActive(true);
+    }
+
+    /// <summary>玩家身上那份“完整全身（含头）”的纯阴影渲染器，由 FullBodyShadow 生成。</summary>
+    SkinnedMeshRenderer FindBodyShadow()
+    {
+        var player = Level2Director.Instance ? Level2Director.Instance.Player : null;
+        if (!player) return null;
+        foreach (var r in player.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            if (r && r.gameObject.name == "Full character shadow") return r;
+        return null;
+    }
+
+    /// <summary>玩家自己的蒙皮网格（不含那份纯阴影副本），用来量他到底站在哪。</summary>
+    SkinnedMeshRenderer FindBodySkin()
+    {
+        var player = Level2Director.Instance ? Level2Director.Instance.Player : null;
+        if (!player) return null;
+        foreach (var r in player.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            if (r && r.shadowCastingMode != UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly) return r;
+        return null;
     }
 
     // ---------------- 桌上的盒子 ----------------
@@ -160,44 +300,6 @@ public sealed class Level2Mirror : MonoBehaviour
         box.visual = target;
         box.Bind(target);
         Debug.Log($"[谜题三] 桌上的盒子 {L2.Fmt(target.position)}");
-    }
-
-    void BuildMirrorCamera()
-    {
-        var go = new GameObject("镜面反射相机");
-        mirrorCam = go.AddComponent<Camera>();
-        mirrorCam.enabled = false;                  // 只在需要时手动 Render
-        mirrorCam.targetTexture = rt;
-        mirrorCam.fieldOfView = 68f;
-        mirrorCam.nearClipPlane = .05f;
-        mirrorCam.farClipPlane = 60f;
-        mirrorCam.clearFlags = CameraClearFlags.SolidColor;
-        mirrorCam.backgroundColor = new Color(.05f, .05f, .07f);
-
-        // 镜像相机里的画面左右是反的，这正是镜子的效果；不用再翻。
-        go.transform.SetParent(transform, false);
-    }
-
-    void LateUpdate()
-    {
-        if (!mirrorCam || !mirrorPlane || !Camera.main) return;
-        var viewer = Camera.main.transform.position;
-        if ((viewer - mirrorPlane.position).sqrMagnitude > 220f) return;   // 离得远就不渲染
-
-        Vector3 M = mirrorPlane.position;
-        Vector3 N = mirrorPlane.right;                 // 薄片的 +X 就是镜面法线
-        if (Vector3.Dot(N, viewer - M) < 0f) N = -N;
-
-        Vector3 camPos = M + Vector3.Reflect(viewer - M, N);
-        Vector3 dir = Vector3.Reflect((M - viewer).normalized, N);
-        if (dir.sqrMagnitude < .001f) return;
-
-        mirrorCam.transform.SetPositionAndRotation(camPos, Quaternion.LookRotation(dir, Vector3.up));
-        mirrorCam.fieldOfView = Camera.main.fieldOfView;
-
-        if (planeRenderer) planeRenderer.enabled = false;
-        mirrorCam.Render();
-        if (planeRenderer) planeRenderer.enabled = true;
     }
 
     // ---------------- 问答流程 ----------------
@@ -263,8 +365,9 @@ public sealed class Level2Mirror : MonoBehaviour
 
     void ShowAdult()
     {
-        if (!adultLayer) return;
-        adultLayer.gameObject.SetActive(true);
+        if (!adultDisc) return;
+        adultShown = true;
+        adultDisc.gameObject.SetActive(true);
         if (!adultMaterial) return;
         StopAllCoroutines();
         StartCoroutine(FadeAdult());
@@ -289,7 +392,7 @@ public sealed class Level2Mirror : MonoBehaviour
         finished = true;
         foreach (var l in FindObjectsOfType<L2Flicker>()) l.gameObject.SetActive(false);
 
-        // 黑幕白字：一句一句浮出来，全部出完后才允许按空格。
+        // 黑幕白字：一个字一个字打出来，全部出完后才允许按空格。
         Ui?.Ending("主角内心独白", new[]
         {
             "原来当年的信，不是用来等待一个完美的未来。",
@@ -302,6 +405,40 @@ public sealed class Level2Mirror : MonoBehaviour
     {
         Debug.Log("[谜题三] 全部解密闭环完成");
         Ui?.Ending("—— 完 ——", new[] { "" }, null);
+    }
+
+    // ---------------- 存档 ----------------
+
+    /// <summary>0 未解锁 / 1 已解锁 / 2 已答完 / 3 已读信 / 4 已看完结局。</summary>
+    public int Stage
+    {
+        get
+        {
+            if (finished) return 4;
+            if (letterOpened) return 3;
+            if (answered) return 2;
+            if (unlocked) return 1;
+            return 0;
+        }
+    }
+
+    public void RestoreStage(int stage)
+    {
+        if (stage <= 0) return;
+        unlocked = true;
+        if (stage >= 2)
+        {
+            talked = true;
+            answered = true;
+            if (box) box.Open();
+        }
+        if (stage >= 3)
+        {
+            letterOpened = true;
+            ShowAdult();
+        }
+        if (stage >= 4) finished = true;
+        Debug.Log($"[谜题三] 读档恢复：进度 {stage}");
     }
 }
 

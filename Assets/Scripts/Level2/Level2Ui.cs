@@ -283,11 +283,11 @@ public sealed class Level2Ui : MonoBehaviour
         if (letterPaper) GUI.DrawTexture(r, letterPaper, ScaleMode.ScaleAndCrop, true);
         else Fill(r, new Color(.94f, .90f, .80f, 1f));
 
-        float pad = w * .13f;
+        float pad = w * .10f;
         GUI.Label(new Rect(r.x + pad, r.y + h * .16f, w - pad * 2f, 60f),
             current.title ?? "", Style(Mathf.RoundToInt(h * .052f), TextAnchor.MiddleCenter, new Color(.30f, .22f, .16f)));
-        GUI.Label(new Rect(r.x + pad, r.y + h * .30f, w - pad * 2f, h * .42f),
-            current.body ?? "", Style(Mathf.RoundToInt(h * .045f), TextAnchor.UpperCenter, new Color(.24f, .17f, .12f)));
+        GUI.Label(new Rect(r.x + pad, r.y + h * .30f, w - pad * 2f, h * .44f),
+            current.body ?? "", Style(Mathf.RoundToInt(h * .040f), TextAnchor.UpperCenter, new Color(.24f, .17f, .12f)));
         GUI.Label(new Rect(r.x + pad, r.yMax - h * .10f, w - pad * 2f, 32f),
             "空格合上", Style(17, TextAnchor.MiddleRight, new Color(.34f, .26f, .18f, .85f)));
     }
