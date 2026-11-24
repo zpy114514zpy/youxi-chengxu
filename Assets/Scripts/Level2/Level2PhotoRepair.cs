@@ -35,11 +35,19 @@ public sealed class Level2PhotoRepair : MonoBehaviour
     // 旧照片的色调：不鲜亮，但也不是全黑。
     static readonly Color Tint = new Color(.62f, .58f, .52f, 1f);
     static readonly Color Edge = new Color(.42f, .74f, 1f, 1f);
+    // 相框的“待修补”描边：黄色，和残片的蓝描边区分开 —— 玩家一进房间就知道墙上有东西要补。
+    static readonly Color OutlineYellow = new Color(1f, .84f, .20f, 1f);
+    // 描边粗细是世界单位（米）。相框 0.54×0.37，1cm 就是紧贴画框的一圈细线。
+    const float BorderThickness = .010f;
+    // 离画框正面多远（朝房间里）：1.5cm 让整圈浮在画框前面，既不会和画框/墙面抢深度，
+    // 也不会被画框凸起的边沿挡住。
+    const float BorderGap = .015f;
 
     Level2Ui Ui => Level2Director.Instance ? Level2Director.Instance.Ui : null;
 
     readonly List<Transform> pieces = new List<Transform>();
     Transform picture;
+    Transform border;                    // 黄描边（四条细边），补完就关掉
     Level2PhotoFrame frame;
     int placed, lastHave;
     public int Placed => placed;
@@ -173,7 +181,55 @@ public sealed class Level2PhotoRepair : MonoBehaviour
 
         frame = host.AddComponent<Level2PhotoFrame>();
         frame.host = this;
-        Debug.Log($"[谜题一] 全家福交互点 {L2.Fmt(host.transform.position)}");
+
+        // 黄色描边：这幅全家福是谜题一的目标，暗房间里不描一下玩家容易找不到。
+        // 不能用 ProximityOutline —— 它是沿法线膨胀的外壳 + 加法混合，而相框几乎是一块平板，
+        // 外壳整片盖在照片上，结果整幅画都在发黄光。这里自己拿四条细边圈一圈。
+        BuildBorder(bounds);
+
+        Debug.Log($"[谜题一] 全家福交互点 {L2.Fmt(host.transform.position)}，画框 {L2.Fmt(bounds.size)}，黄色描边 {(border ? "已添加" : "添加失败")}");
+    }
+
+    /// <summary>
+    /// 在相框四周拼四条细黄条（实体薄方条，不是单面 Quad）。
+    /// 之前用 Quad 完全看不见：Unity 的 Quad 原语法线朝 local -Z，而 URP Unlit 默认背面剔除，
+    /// 从房间里看正好是背面，整圈被剔掉了。方条是实体，任何角度都在。
+    /// </summary>
+    void BuildBorder(Bounds b)
+    {
+        if (b.size.y <= .01f || b.size.z <= .01f)
+        {
+            Debug.LogWarning($"[谜题一] 相框尺寸异常 {L2.Fmt(b.size)}，跳过描边");
+            return;
+        }
+
+        float halfH = b.size.y * .5f;
+        float halfW = b.size.z * .5f;
+        float t = BorderThickness;
+        float x = b.min.x - BorderGap;                  // 房间在 -X 侧，整圈浮在画框前面
+        var mat = L2.Unlit(new Color(OutlineYellow.r, OutlineYellow.g, OutlineYellow.b, 1f));
+
+        border = new GameObject("全家福·黄色描边").transform;
+
+        // 上 / 下：横条铺满（含两个角），截面就是线的粗细
+        for (int i = 0; i < 2; i++)
+        {
+            float s = i == 0 ? 1f : -1f;
+            L2.Box("描边" + (i + 1), border,
+                new Vector3(x, b.center.y + s * (halfH + t * .5f), b.center.z),
+                new Vector3(t, t, 2f * halfW + 2f * t), mat, Quaternion.identity);
+        }
+        // 左 / 右：竖条接满上下两条之间
+        for (int i = 0; i < 2; i++)
+        {
+            float s = i == 0 ? 1f : -1f;
+            L2.Box("描边" + (i + 3), border,
+                new Vector3(x, b.center.y, b.center.z + s * (halfW + t * .5f)),
+                new Vector3(t, 2f * halfH, t), mat, Quaternion.identity);
+        }
+
+        Debug.Log($"[谜题一] 黄色描边 4 条，外框 {b.size.z + t * 2f:F2}×{b.size.y + t * 2f:F2}m，" +
+                  $"浮在 x={x:F2}（画框 {L2.Fmt(b.min)} ~ {L2.Fmt(b.max)}）");
     }
 
     // ---------------- 放置 ----------------
@@ -266,12 +322,15 @@ public sealed class Level2PhotoRepair : MonoBehaviour
     public void OnRepaired()
     {
         Debug.Log("[谜题一] 三张残片补完");
+        // 补完就不再是“待修补目标”，黄描边关掉，免得整关一直亮着。
+        if (border) { border.gameObject.SetActive(false); Debug.Log("[谜题一] 补完，关闭黄色描边"); }
         if (!Level2Director.Instance) return;
         var ui = Level2Director.Instance.Ui;
 
-        ui.Say("内心独白", "照片再也回不到从前鲜亮的模样。\n发生过的事不会消失，但我不必把回忆彻底撕碎。");
-        ui.Say("谜题一完成", "恭喜完成谜题一。");
-        ui.Say("新的目标", "我的玩偶与吉他还在这里，我需要把他们放在“二楼一号房间”里。");
+        // 补完给三页：先道喜，再说下一步，最后留一句余韵。
+        ui.Say("谜题一完成", "恭喜完成相框的修补，全家福又回来啦！");
+        ui.Say("新的目标", "接下来请完成对玩偶和吉他的整理归位。");
+        ui.Say("家的样子", "期待看到被你整理好的家哦！");
 
         if (Level2Director.Instance.Toys) Level2Director.Instance.Toys.Unlock();
         // 出去外面那扇门，到这刻才开。
@@ -309,6 +368,7 @@ public sealed class Level2PhotoRepair : MonoBehaviour
         }
         placed = Mathf.Min(count, PieceCount);
         Repaired = placed >= PieceCount;
+        if (Repaired && border) border.gameObject.SetActive(false);   // 读档时已经补完，黄描边别再亮
         Debug.Log($"[谜题一] 读档恢复：已补 {placed} / {PieceCount} 块");
     }
 
