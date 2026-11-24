@@ -19,14 +19,25 @@ public sealed class Level2Mirror : MonoBehaviour
     Material discMaterial, adultMaterial;
     Level2MirrorTalk talk;
     Level2LetterBox box;
+    ProximityOutline boxOutline;
     SkinnedMeshRenderer bodyShadow, bodySkin;
 
     Vector3 mirrorCenter, mirrorNormal;
     float halfW = .21f, halfH = .58f;
 
-    bool unlocked, talked, answered, letterOpened, finished, adultShown;
+    bool unlocked, talked, answered, letterOpened, finished, adultShown, saidSomething;
+
+    /// <summary>镜子前那句“想对小时候的自己说的话”，未解锁时也能说，和任务用的 answered 分开记。</summary>
+    static readonly string[] SelfWords =
+    {
+        "我没能一直开心，但我好好走到现在了",
+        "谢谢你当年的满怀期待，让我来到了这里",
+    };
     public bool Unlocked => unlocked;
     public bool Answered => answered;
+
+    /// <summary>未解锁时在镜子前说过心里话没有（说过就不再给交互提示，免得按 E 毫无反应）。</summary>
+    public bool SaidSomething => saidSomething;
 
     public void Setup()
     {
@@ -299,22 +310,40 @@ public sealed class Level2Mirror : MonoBehaviour
         box.host = this;
         box.visual = target;
         box.Bind(target);
-        Debug.Log($"[谜题三] 桌上的盒子 {L2.Fmt(target.position)}");
+        // 和玩偶、吉他同一套蓝描边（走近约 1.9m 才亮）：玩家下楼看见桌上有个亮着的东西，就知道能开。
+        boxOutline = L2.AddBlueOutline(target);
+        Debug.Log($"[谜题三] 桌上的盒子 {L2.Fmt(target.position)} 已加蓝色描边 {L2.Fmt(bounds.size)}");
     }
 
     // ---------------- 问答流程 ----------------
 
     public void Talk()
     {
+        // 提示页还挂在屏幕上时不要再触发：否则连着按 E 会把同一段台词 / 问答页重复排进队列，
+        // 表现为“看完又被问一遍”。放在最前面，未解锁那两页同样受保护。
+        if (Ui && Ui.IsPageOnScreen) return;
+
         if (!unlocked)
         {
-            Ui?.Note("落地镜", "镜子里是一个还没长大的孩子。她好像在等我说点什么。");
+            // 已经说过心里话就不再重复弹页，安安静静让玩家走开。
+            if (saidSomething) return;
+            // 还没轮到这里的正事，先让玩家认出镜子里的自己 —— 两句独白，接着说说心里话。
+            Ui?.Say("内心独白", "这就是小时候的自己吗？");
+            Ui?.Say("内心独白", "原来小时候的我这么可爱、这么热爱生活。");
+            AskSelfWord();
             return;
         }
-        if (talked) { if (!answered) Ask(); return; }
+
+        if (talked)
+        {
+            if (!answered) Ask();
+            else Ui?.Note("镜子", "镜子里的人看着我，没有说话。桌上的盒子还开着。");
+            return;
+        }
         talked = true;
 
-        Ui?.Say("内心独白", "原来我一直在和过去的自己对视。");
+        // 已经在镜子前说过心里话的，就不再重复那段独白，直接进正式问答。
+        if (!saidSomething) Ui?.Say("内心独白", "原来我一直在和过去的自己对视。");
         // 直接入队排在独白后面，不靠 Invoke 定时（Invoke 一旦碰上组件被禁用 / 暂停就会静默丢掉，
         // 表现就是“独白看完、问答没出来”）。队列本身保证顺序，所以这里同步调用是安全的。
         Ask();
@@ -322,14 +351,31 @@ public sealed class Level2Mirror : MonoBehaviour
 
     void Ask()
     {
+        if (answered) return;
         Debug.Log("[谜题三] 弹出问答页（两选一）");
-        Ui?.Ask("镜子", "你现在开心吗，有什么想对此时小时候的你说？",
-            new[]
-            {
-                "我没能一直开心，但我好好走到现在了",
-                "谢谢你当年的满怀期待，让我来到了这里",
-            },
-            OnAnswer);
+        Ui?.Ask("镜子", "你现在开心吗，有什么想对此时小时候的你说？", SelfWords, OnAnswer);
+    }
+
+    /// <summary>
+    /// 还没解锁谜题三时，镜子前也先问一句“想对小时候的自己说什么”。
+    /// 只是说心里话，不推进任何进度 —— 所以用 saidSomething 记，不碰 answered。
+    /// </summary>
+    void AskSelfWord()
+    {
+        if (saidSomething) return;
+        Debug.Log("[谜题三] 弹出“想对小时候的我说”问答页（两选一）");
+        Ui?.Ask("镜子", "你现在开心吗，有什么想对此时小时候的你说？", SelfWords, OnSelfWord);
+    }
+
+    void OnSelfWord(int index)
+    {
+        if (saidSomething) return;
+        saidSomething = true;
+        Debug.Log($"[谜题三] 镜子前说的话：选项 {index + 1}");
+
+        // 选哪一句都走同一段：镜子不评判对错，只把话题交回给玩家自己。
+        Ui?.Say("镜子里", "其实不管你如何选择，你都会找到你想要的东西的！");
+        Ui?.Say("小木箱", "请往旁边的桌子上看看，那儿有个小木箱，里面可能有你想要的。");
     }
 
     public void Answer(int index) => OnAnswer(index);
@@ -354,6 +400,7 @@ public sealed class Level2Mirror : MonoBehaviour
     {
         if (letterOpened) return;
         letterOpened = true;
+        if (boxOutline) boxOutline.enabled = false;   // 信已经摊开，别再用蓝边指着这个空盒子
 
         // 信出现的那一刻，镜子里的人长大了。
         ShowAdult();
@@ -438,6 +485,7 @@ public sealed class Level2Mirror : MonoBehaviour
         if (stage >= 3)
         {
             letterOpened = true;
+            if (boxOutline) boxOutline.enabled = false;   // 读档时信已经读过了，蓝边不用再亮
             ShowAdult();
         }
         if (stage >= 4) finished = true;
@@ -455,7 +503,7 @@ public sealed class Level2MirrorTalk : L2Interactable
         get
         {
             if (!host) return "";
-            if (!host.Unlocked) return "E 看看镜子";
+            if (!host.Unlocked) return host.SaidSomething ? "" : "E 看看镜子";
             if (host.Answered) return "E 再看一眼镜子";
             return "E 站到镜子前";
         }
@@ -493,7 +541,7 @@ public sealed class Level2LetterBox : L2Interactable
     {
         get
         {
-            if (!popped) return "一个旧木盒";
+            if (!popped) return "E 看看小木箱";
             if (read) return "信已经读过了";
             return "E 打开盒子";
         }
@@ -501,7 +549,12 @@ public sealed class Level2LetterBox : L2Interactable
 
     public override void Interact(PlayerInventory inventory)
     {
-        if (!popped) return;
+        if (!popped)
+        {
+            // 玩家被引导过来看盒子，但谜题三还没到时候开 —— 别按了 E 毫无反应。
+            Level2Ui.Instance?.Note("小木箱", "盒盖扣得很紧，现在还打不开。");
+            return;
+        }
         if (read) return;
         read = true;
         host?.OnBoxOpened();

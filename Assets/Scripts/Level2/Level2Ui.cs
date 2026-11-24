@@ -110,6 +110,9 @@ public sealed class Level2Ui : MonoBehaviour
         typedLine = 0;
         typedCount = 0;
         RefreshBlocker();
+        // 问答页单独记一行：排查“问答没出现”时，看得见它到底有没有轮到显示。
+        if (page.kind == Kind.Ask)
+            Debug.Log($"[第二关UI] 问答页已显示：{page.title}（{page.options?.Length ?? 0} 个选项）");
     }
 
     /// <summary>最后一句是不是已经一个字一个字打完了。</summary>
@@ -209,9 +212,24 @@ public sealed class Level2Ui : MonoBehaviour
             }
         }
 
+        // 问答页：鼠标点选项之外，再留一条键盘通道（1/2/3），鼠标没锁好或点不中也答得了。
+        if (current.kind == Kind.Ask)
+        {
+            int pick = -1;
+            if (Input.GetKeyDown(KeyCode.Alpha1) || Input.GetKeyDown(KeyCode.Keypad1)) pick = 0;
+            else if (Input.GetKeyDown(KeyCode.Alpha2) || Input.GetKeyDown(KeyCode.Keypad2)) pick = 1;
+            else if (Input.GetKeyDown(KeyCode.Alpha3) || Input.GetKeyDown(KeyCode.Keypad3)) pick = 2;
+            else if (Input.GetKeyDown(KeyCode.Alpha4) || Input.GetKeyDown(KeyCode.Keypad4)) pick = 3;
+            if (pick >= 0 && current.options != null && pick < current.options.Length)
+            {
+                GameAudio.PlayPage();
+                AnswerCurrent(pick);
+            }
+            return;
+        }
+
         if (Input.GetKeyDown(KeyCode.Space))
         {
-            if (current.kind == Kind.Ask) return;                                  // 必须点选项
             if (!AllTyped) return;                                                 // 字没打完不给跳
             GameAudio.PlayPage();                                                  // 提示翻页音
             Advance();
@@ -459,7 +477,14 @@ public sealed class Level2Ui : MonoBehaviour
             y += btnH + gap;
         }
         // 问答页空格是无效的，底部别再写“空格继续”误导玩家，直接说清楚要选一个。
-        DrawBottomRow(f, n > 0 ? "点上面的选项回答" : null);
+        string hint = n switch
+        {
+            0 => null,
+            1 => "点选项，或按 1 回答",
+            2 => "点选项，或按 1 / 2 回答",
+            _ => "点选项回答（也可按数字键）"
+        };
+        DrawBottomRow(f, hint);
     }
 
     /// <summary>
