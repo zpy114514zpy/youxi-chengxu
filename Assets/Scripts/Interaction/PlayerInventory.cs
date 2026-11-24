@@ -219,11 +219,13 @@ public sealed class PlayerInventory : MonoBehaviour
             if(StoryProgress.Instance)StoryProgress.Instance.AddFragment(fragment.fragmentName,fragment.text);
             item.gameObject.SetActive(false);
             if(player)player.PlayPickup();
+            GameAudio.PlayPickup();
             return;
         }
         items.Add(item);item.gameObject.SetActive(false);selected=items.Count-1;
         Debug.Log("[拾取] "+item.displayName+"（id="+item.storyId+"），背包里现有 "+items.Count+" 件。",item);
         if(player)player.PlayPickup();
+        GameAudio.PlayPickup();
     }
     public PickupItem ConsumeSelected(string id)
     {
@@ -306,6 +308,7 @@ public sealed class PlayerInventory : MonoBehaviour
                 var body=item.GetComponent<Rigidbody>();
                 if(body){body.velocity=Vector3.zero;body.angularVelocity=Vector3.zero;body.useGravity=false;body.isKinematic=true;}
                 items.RemoveAt(selected);selected=Mathf.Clamp(selected,0,Mathf.Max(0,items.Count-1));
+                GameAudio.PlayPlace();
                 return;
             }
         }
@@ -314,6 +317,7 @@ public sealed class PlayerInventory : MonoBehaviour
         var rb=item.GetComponent<Rigidbody>();if(!rb)rb=item.gameObject.AddComponent<Rigidbody>();
         rb.isKinematic=false;rb.useGravity=true;rb.collisionDetectionMode=CollisionDetectionMode.ContinuousDynamic;rb.velocity=Vector3.zero;
         items.RemoveAt(selected);selected=Mathf.Clamp(selected,0,Mathf.Max(0,items.Count-1));
+        GameAudio.PlayPlace();
     }
     void OnGUI()
     {

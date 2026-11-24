@@ -32,7 +32,7 @@ public sealed class StoryPlacement : MonoBehaviour
         foreach(var c in item.GetComponentsInChildren<Collider>())c.enabled=false;
         foreach(var r in GetComponentsInChildren<Renderer>())r.enabled=false;
         foreach(var c in GetComponentsInChildren<Collider>())c.enabled=false;
-        filled=true;puzzle.OnPlaced(order);return true;
+        filled=true;puzzle.OnPlaced(order);GameAudio.PlayPlace();return true;
     }
     void OnGUI()
     {

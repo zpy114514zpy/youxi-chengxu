@@ -206,6 +206,7 @@ public sealed class Level2PhotoRepair : MonoBehaviour
             AnchorToFrame(piece.transform, placed);
             placed++;
             if (placed >= PieceCount) Repaired = true;
+            GameAudio.PlayPlace();
             return true;
         }
         return false;

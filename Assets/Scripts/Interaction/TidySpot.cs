@@ -27,6 +27,7 @@ public sealed class TidySpot : MonoBehaviour
         }
         var collider = GetComponent<Collider>();
         if (collider) collider.enabled = false;
+        GameAudio.PlayPlace();
         return true;
     }
 }

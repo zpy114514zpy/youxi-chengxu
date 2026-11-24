@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -8,8 +7,7 @@ using UnityEngine.SceneManagement;
 /// 冷色调：深蓝黑底、钢蓝描边、淡青光字 —— 和第一关的暖黄、第二关的冷灰都能搭上。
 ///
 /// 功能：
-///   · 保存当前进度并退出
-///   · 四格存档：每点一次存到下一格，第五次回到第一格覆盖（1→2→3→4→1…）
+///   · 保存当前进度并退出（进度按 4 格循环自动往后写，界面上不再列存档格、也不提供读档）
 ///   · 背景音量（控制全局 AudioListener 音量 + 第二关的房间底噪）
 ///   · 第一人称灵敏度（直接写 FirstPersonView.mouseSensitivity）
 /// </summary>
@@ -37,11 +35,6 @@ public sealed class GameMenu : MonoBehaviour
     float volume = .60f, sensitivity = 1.60f;
     string toast = "";
     float toastUntil;
-    int confirmSlot = -1;
-    int nextSlot = 1;
-
-    struct SlotInfo { public bool has; public string stamp; }
-    readonly SlotInfo[] slots = new SlotInfo[SaveSystem.Slots];
 
     Font font;
     Texture2D white;
@@ -68,7 +61,6 @@ public sealed class GameMenu : MonoBehaviour
         sensitivity = Mathf.Clamp(PlayerPrefs.GetFloat(SensKey, 1.60f), .1f, 4.5f);
         AudioListener.volume = volume;
 
-        RefreshSlots();
         SceneManager.sceneLoaded += OnSceneLoaded;
         OnSceneLoaded(SceneManager.GetActiveScene(), LoadSceneMode.Single);
     }
@@ -113,7 +105,7 @@ public sealed class GameMenu : MonoBehaviour
         ambience.loop = true;
         ambience.playOnAwake = true;
         ambience.spatialBlend = 0f;
-        ambience.volume = .32f;
+        ambience.volume = .16f;
         ambience.Play();
     }
 
@@ -147,7 +139,7 @@ public sealed class GameMenu : MonoBehaviour
 
     // ---------------- 开关 ----------------
 
-    /// <summary>自检用：直接打开 / 关闭 / 刷新存档格。</summary>
+    /// <summary>自检用：直接打开 / 关闭。</summary>
     public void OpenForTest()
     {
         if (!open) Open();
@@ -157,8 +149,6 @@ public sealed class GameMenu : MonoBehaviour
     {
         if (open) Close();
     }
-
-    public void RefreshForTest() => RefreshSlots();
 
     void Update()
     {
@@ -184,8 +174,6 @@ public sealed class GameMenu : MonoBehaviour
     void Open()
     {
         open = true;
-        confirmSlot = -1;
-        RefreshSlots();
         ApplySensitivity();
         UiInputBlocker.Active = true;
         Time.timeScale = 0f;
@@ -196,22 +184,10 @@ public sealed class GameMenu : MonoBehaviour
     void Close()
     {
         open = false;
-        confirmSlot = -1;
         UiInputBlocker.Active = false;
         Time.timeScale = 1f;
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
-    }
-
-    void RefreshSlots()
-    {
-        nextSlot = SaveSystem.NextSlot;
-        for (int i = 0; i < slots.Length; i++)
-        {
-            var data = SaveSystem.Read(i + 1);
-            slots[i].has = data != null;
-            slots[i].stamp = data != null ? data.stamp : "";
-        }
     }
 
     void Toast(string message)
@@ -246,16 +222,16 @@ public sealed class GameMenu : MonoBehaviour
 
         Fill(new Rect(0, 0, Screen.width, Screen.height), Ink);
 
-        // 固定 980×760 的设计画布，按屏幕等比缩放 —— 不管 Game 视图是 16:9 还是别的比例，
+        // 固定 980×640 的设计画布，按屏幕等比缩放 —— 不管 Game 视图是 16:9 还是别的比例，
         // 面板都不会被裁掉、控件也不会挤到一起。
-        const float BW = 980f, BH = 760f;
+        const float BW = 980f, BH = 640f;
         float s = Mathf.Min(Screen.width / BW, Screen.height / BH) * .97f;
         var oldMatrix = GUI.matrix;
         GUI.matrix = Matrix4x4.TRS(
             new Vector3((Screen.width - BW * s) * .5f, (Screen.height - BH * s) * .5f, 0f),
             Quaternion.identity, new Vector3(s, s, 1f));
 
-        var panel = new Rect((BW - 900f) * .5f, (BH - 700f) * .5f, 900f, 700f);
+        var panel = new Rect((BW - 900f) * .5f, (BH - 580f) * .5f, 900f, 580f);
         Fill(panel, PanelFill);
         Outline(panel, PanelEdge);
 
@@ -271,7 +247,7 @@ public sealed class GameMenu : MonoBehaviour
             open ? "Esc 返回游戏" : "", Style(18, TextAnchor.MiddleRight, TextDim));
         y += 62f;
         Fill(new Rect(x, y, inner, 1f), Line);
-        y += 26f;
+        y += 30f;
 
         // ---- 音量 ----
         y = DrawSlider(x, y, inner, "背景音量", ref volume, 0f, 1f,
@@ -284,7 +260,7 @@ public sealed class GameMenu : MonoBehaviour
             });
 
         // ---- 灵敏度 ----
-        y = DrawSlider(x, y + 8f, inner, "视角灵敏度", ref sensitivity, .3f, 4.5f,
+        y = DrawSlider(x, y + 10f, inner, "视角灵敏度", ref sensitivity, .3f, 4.5f,
             sensitivity.ToString("F1"), v =>
             {
                 sensitivity = v;
@@ -293,69 +269,23 @@ public sealed class GameMenu : MonoBehaviour
                 PlayerPrefs.Save();
             });
 
-        y += 24f;
+        y += 30f;
         Fill(new Rect(x, y, inner, 1f), Line);
-        y += 24f;
-
-        // ---- 存档 ----
-        GUI.Label(new Rect(x, y, inner, 34f), "存档", Style(24, TextAnchor.MiddleLeft, Accent));
-        GUI.Label(new Rect(x, y, inner, 34f),
-            "下一次保存 → 存档 " + "①②③④"[Mathf.Clamp(nextSlot - 1, 0, 3)] +
-            "   （第 5 次保存会回到存档 ①）",
-            Style(18, TextAnchor.MiddleRight, TextDim));
-        y += 44f;
-
-        float gap = 14f;
-        float cardW = (inner - gap * 3f) / 4f, cardH = 96f;
-        for (int i = 0; i < slots.Length; i++)
-        {
-            var r = new Rect(x + i * (cardW + gap), y, cardW, cardH);
-            bool hover = r.Contains(Event.current.mousePosition);
-            bool confirming = confirmSlot == i;
-            Fill(r, confirming ? new Color(.10f, .26f, .38f, .98f) : (hover && slots[i].has ? BtnHover : BtnFill));
-            Outline(r, confirming ? Accent : (slots[i].has ? new Color(.32f, .58f, .80f, .75f) : new Color(.24f, .34f, .44f, .55f)));
-
-            GUI.Label(new Rect(r.x + 12, r.y + 10, r.width - 24, 30f),
-                "存档 " + "①②③④"[i], Style(21, TextAnchor.MiddleLeft, slots[i].has ? TextMain : TextDim));
-            GUI.Label(new Rect(r.x + 12, r.y + 40, r.width - 24, 24f),
-                slots[i].has ? slots[i].stamp : "空",
-                Style(16, TextAnchor.MiddleLeft, slots[i].has ? AccentSoft : new Color(.42f, .50f, .58f)));
-            GUI.Label(new Rect(r.x + 12, r.y + 62, r.width - 24, 24f),
-                slots[i].has ? (confirming ? "再点一次读取" : "点击读取") : "尚未使用",
-                Style(15, TextAnchor.MiddleLeft, slots[i].has ? TextDim : new Color(.38f, .45f, .52f)));
-
-            if (GUI.Button(r, GUIContent.none, GUIStyle.none) && slots[i].has)
-            {
-                if (confirming)
-                {
-                    confirmSlot = -1;
-                    Close();
-                    SaveSystem.Load(i + 1);
-                }
-                else
-                {
-                    confirmSlot = i;
-                    Toast("再点一次「存档 " + "①②③④"[i] + "」就从这里继续（当前没保存的进度会丢掉）");
-                }
-            }
-        }
-        y += cardH + 18f;
+        y += 34f;
 
         // ---- 保存 ----
-        if (Button(new Rect(x, y, inner, 52f), "保 存 进 度", true))
+        if (Button(new Rect(x, y, inner, 54f), "保 存 进 度", true))
         {
             int slot = SaveSystem.SaveToNextSlot(out var saved);
-            RefreshSlots();
-            Toast($"已保存到 存档 {"①②③④"[slot - 1]} · {saved.stamp}（共 {SaveSystem.Slots} 格循环）");
+            Toast("进度已保存 · " + saved.stamp);
         }
-        y += 66f;
+        y += 70f;
 
         // ---- 退出 ----
         float half = (inner - 14f) * .5f;
         if (Button(new Rect(x, y, half, 50f), "保存并退出游戏", true))
         {
             SaveSystem.SaveToNextSlot(out _);
-            RefreshSlots();
             Toast("进度已保存，正在退出…");
             StartCoroutine(QuitSoon());
         }
@@ -363,14 +293,14 @@ public sealed class GameMenu : MonoBehaviour
             Close();
 
         // ---- 底部说明 ----
-        GUI.Label(new Rect(x, panel.yMax - 62f, inner, 40f),
-            "存档保存在本机。第二关的谜题进度会完整恢复；第一关恢复所在位置与剧情记录。",
+        GUI.Label(new Rect(x, panel.yMax - 46f, inner, 30f),
+            "进度保存在本机。",
             Style(15, TextAnchor.MiddleCenter, new Color(.48f, .58f, .68f)));
 
         if (Time.unscaledTime < toastUntil && !string.IsNullOrEmpty(toast))
         {
-            float tw = Mathf.Min(inner, 760f);
-            var tr = new Rect(panel.x + (panel.width - tw) * .5f, panel.yMax - 104f, tw, 38f);
+            float tw = Mathf.Min(inner, 620f);
+            var tr = new Rect(panel.x + (panel.width - tw) * .5f, panel.yMax - 94f, tw, 36f);
             Fill(tr, new Color(.04f, .10f, .16f, .96f));
             Outline(tr, new Color(.36f, .64f, .90f, .60f), 1f);
             GUI.Label(tr, toast, Style(17, TextAnchor.MiddleCenter, Accent));

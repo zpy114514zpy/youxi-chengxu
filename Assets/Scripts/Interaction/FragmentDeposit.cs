@@ -47,6 +47,7 @@ public sealed class FragmentDeposit : MonoBehaviour
         }
 
         filled = true;
+        GameAudio.PlayPlace();
         foreach (var r in GetComponentsInChildren<Renderer>()) r.enabled = false;
         foreach (var c in GetComponentsInChildren<Collider>()) c.enabled = false;
         foreach (var l in GetComponentsInChildren<Light>()) l.enabled = false;

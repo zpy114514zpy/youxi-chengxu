@@ -54,6 +54,10 @@ public sealed class Level2Ui : MonoBehaviour
 
     // ---------------- 对外接口 ----------------
 
+    /// <summary>调试/自检用：当前这一页的标题与正文。</summary>
+    public string CurrentTitle => current?.title ?? "";
+    public string CurrentBody => current?.body ?? "";
+
     /// <summary>屏幕正中的叙事页。</summary>
     public void Say(string title, string body) => Enqueue(new Page { kind = Kind.Center, title = title, body = body });
 
@@ -174,8 +178,16 @@ public sealed class Level2Ui : MonoBehaviour
     // ---------------- 绘制 ----------------
 
     GUIStyle Style(int size, TextAnchor anchor, Color color)
-        => new GUIStyle(GUI.skin.label)
-        { font = font, fontSize = size, alignment = anchor, wordWrap = true, normal = { textColor = color } };
+    {
+        var st = new GUIStyle(GUI.skin.label)
+        { font = font, fontSize = size, alignment = anchor, wordWrap = true };
+        st.normal.textColor = color;
+        st.hover.textColor = color;
+        st.active.textColor = color;
+        st.focused.textColor = color;
+        st.onNormal.textColor = color;
+        return st;
+    }
 
     void Fill(Rect r, Color c)
     {
@@ -220,11 +232,41 @@ public sealed class Level2Ui : MonoBehaviour
     void DrawNote()
     {
         float w = Mathf.Min(Screen.width * .70f, 820f);
-        float h = 120f;
+        const int titleSize = 23, bodySize = 21;
+        float lineH = Mathf.Round(bodySize * 1.46f);
+
+        // 面板高度按正文实际要占几行来定 —— 写死 120 的时候，第二行会被框底裁掉。
+        int lines = CountLines(current.body, w - 56f, bodySize);
+        float bodyH = lines * lineH;
+        float h = 52f + bodyH + 18f;
+
         var r = new Rect((Screen.width - w) * .5f, Screen.height - h - 78f, w, h);
         Panel(r);
-        GUI.Label(new Rect(r.x + 26f, r.y + 16f, r.width - 52f, 34f), current.title ?? "", Style(23, TextAnchor.MiddleLeft, new Color(.62f, .86f, 1f)));
-        GUI.Label(new Rect(r.x + 26f, r.y + 50f, r.width - 52f, 52f), current.body ?? "", Style(21, TextAnchor.UpperLeft, new Color(.94f, .95f, .97f)));
+        GUI.Label(new Rect(r.x + 26f, r.y + 13f, r.width - 52f, 34f), current.title ?? "", Style(titleSize, TextAnchor.MiddleLeft, new Color(.62f, .86f, 1f)));
+        GUI.Label(new Rect(r.x + 26f, r.y + 48f, r.width - 52f, bodyH + 4f), current.body ?? "", Style(bodySize, TextAnchor.UpperLeft, new Color(.94f, .95f, .97f)));
+    }
+
+    /// <summary>
+    /// 估算一段文字在给定宽度下要占几行：中文按一个字号宽、西文按 0.56 个字号宽累加。
+    /// 不用真实字体度量，只用来算面板高度，估大一点不会裁字。
+    /// </summary>
+    static int CountLines(string text, float width, int size)
+    {
+        if (string.IsNullOrEmpty(text)) return 1;
+        int total = 0;
+        foreach (var para in text.Split('\n'))
+        {
+            float x = 0f;
+            int n = 1;
+            foreach (char c in para)
+            {
+                float cw = c > 0x2E80 ? size : size * .56f;
+                if (x + cw > width) { n++; x = cw; }
+                else x += cw;
+            }
+            total += n;
+        }
+        return Mathf.Max(1, total);
     }
 
     void DrawAsk()
@@ -285,9 +327,9 @@ public sealed class Level2Ui : MonoBehaviour
 
         float pad = w * .10f;
         GUI.Label(new Rect(r.x + pad, r.y + h * .16f, w - pad * 2f, 60f),
-            current.title ?? "", Style(Mathf.RoundToInt(h * .052f), TextAnchor.MiddleCenter, new Color(.30f, .22f, .16f)));
+            current.title ?? "", Style(Mathf.RoundToInt(h * .052f), TextAnchor.MiddleCenter, new Color(.17f, .12f, .09f)));
         GUI.Label(new Rect(r.x + pad, r.y + h * .30f, w - pad * 2f, h * .44f),
-            current.body ?? "", Style(Mathf.RoundToInt(h * .040f), TextAnchor.UpperCenter, new Color(.24f, .17f, .12f)));
+            current.body ?? "", Style(Mathf.RoundToInt(h * .042f), TextAnchor.UpperCenter, new Color(.11f, .08f, .06f)));
         GUI.Label(new Rect(r.x + pad, r.yMax - h * .10f, w - pad * 2f, 32f),
             "空格合上", Style(17, TextAnchor.MiddleRight, new Color(.34f, .26f, .18f, .85f)));
     }

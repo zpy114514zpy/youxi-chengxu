@@ -190,7 +190,7 @@ public sealed class Level2Toys : MonoBehaviour
             "断了两根弦的旧吉他，琴身上还有小时候贴的贴纸。");
         if (!host) return;
         guitar = host;
-        ui_Note("吉他", "角落里的吉他现在可以拿了 ——\n拿上它，放回二楼一号房一号小房间的沙发旁边。");
+        ui_Note("吉他", "角落里的吉他现在可以拿了 ——\n拿上它，去一号小房间的沙发上放好。");
         Debug.Log("[谜题二] 吉他已解锁拾取");
     }
 
@@ -279,6 +279,7 @@ public sealed class Level2Toys : MonoBehaviour
 
         spot.filled = true;
         if (spot.hint) spot.hint.SetVisible(false);
+        GameAudio.PlayPlace();
         int done = 0;
         foreach (var s in spots) if (s.filled) done++;
         if (done < spots.Count) Ui?.Note("归位", $"{spot.displayName} 放好了（{done} / {spots.Count}）。");
@@ -312,6 +313,16 @@ public sealed class Level2Toys : MonoBehaviour
         p.x = surface.x;
         p.z = surface.z;
         p.y += surface.y - b.min.y;
+        toy.position = p;
+    }
+
+    /// <summary>同帧可用的落底：包围盒自己算（renderer.bounds 要等一帧才刷新）。</summary>
+    static void AlignBottomFast(Transform toy, float surfaceY)
+    {
+        var b = WorldBoundsFast(toy);
+        if (b.size.y < .001f) return;
+        Vector3 p = toy.position;
+        p.y += surfaceY - b.min.y;
         toy.position = p;
     }
 
@@ -367,7 +378,7 @@ public sealed class Level2Toys : MonoBehaviour
     {
         if (guitarTaken) return;
         guitarTaken = true;
-        Ui?.Say("吉他", "我需要把吉他也放回二楼一号房间 ——\n放在一号小房间那张沙发旁边，让它靠着沙发立好。");
+        Ui?.Say("吉他", "我得把吉他也送回二楼一号房间 ——\n搁在一号小房间那张沙发上，琴背靠着靠背摆好。");
         BuildGuitarSpot();
     }
 
@@ -379,125 +390,129 @@ public sealed class Level2Toys : MonoBehaviour
         if (!chair) chair = L2.Find("SM_Chair_B1");
         if (!chair) Debug.LogWarning("[谜题二] 一号小房间里找不到沙发 SM_Chair_B3");
 
-        Vector3 target;
+        Vector3 seat;
+        Vector3 backDir;
         float yaw;
-        Vector3 leanTo;
-        FindGuitarBesideChair(chair, out target, out yaw, out leanTo);
+        FindGuitarOnChair(chair, out seat, out backDir, out yaw);
 
         var host = new GameObject("吉他放置点");
-        host.transform.position = target;
+        host.transform.position = seat;
+
+        // 交互盒包住座位。玩家的交互射线遇到不可交互的家具会继续往后找，
+        // 所以盒子放在沙发里面也能瞄得到，不必凸到走道上挡人。
         var box = host.AddComponent<BoxCollider>();
-        // 交互盒只包住吉他下半截，贴着地，不挡人走路。
-        box.center = Vector3.up * .34f;
-        box.size = new Vector3(.62f, .70f, .62f);
+        box.center = new Vector3(0f, .34f, 0f);
+        box.size = new Vector3(.80f, .70f, .80f);
 
         guitarSpot = host.AddComponent<Level2GuitarSpot>();
         guitarSpot.host = this;
         guitarSpot.yaw = yaw;
-        guitarSpot.leanTo = leanTo;
-        Debug.Log($"[谜题二] 吉他放置点 {L2.Fmt(target)} 朝向 {yaw:F0}° 靠向 {L2.Fmt(leanTo)}");
+        guitarSpot.backDir = backDir;
+        guitarSpot.seatY = seat.y;
+
+        // 蓝色提示立在沙发前的地面上（座位正前方 0.62m）：
+        // 摆在座位上会被扶手和靠背挡掉一半，站在门口根本看不见。
+        var hintGo = new GameObject("放置提示");
+        hintGo.transform.SetParent(host.transform, false);
+        Vector3 hp = seat - backDir * .55f;
+        hintGo.transform.position = new Vector3(hp.x, FloorY, hp.z);
+        var hint = hintGo.AddComponent<Level2SpotHint>();
+        hint.Build(.16f, .60f);
+        guitarSpot.hint = hint;
+
+        Debug.Log($"[谜题二] 吉他放置点 {L2.Fmt(seat)} 坐垫面 y={seat.y:F3} 靠背朝 {L2.Fmt(backDir)}");
     }
 
     // 一号小房间里那张扶手椅（沙发）。
     Transform chair;
 
     /// <summary>
-    /// 吉他靠在「一号小房间」那张沙发边上。
-    /// 这把椅子是贴着墙的（背后只有 0.2m），所以不能简单地绕一圈取第一个空位：
-    ///   · 方向按「离门越近越优先」排序，保证从 A6 门进来第一眼就能看见吉他；
-    ///   · 脚下必须是二楼地板（打到家具顶面不算）；
-    ///   · 用球形扫描量真实间隙（不能用 OverlapCapsule —— 墙和地板是 MeshCollider，
-    ///     非凸网格只会按 AABB 判定，会把半个房间都算成挡路）。
+    /// 量出这张沙发的「坐垫面」和「靠背方向」。
+    /// 琴不是立在椅子旁边，而是搁在座位上、琴背搭着靠背 —— 现实里随手把琴放在沙发上的样子。
+    /// 靠背方向用“整把椅子里最高的那块渲染器相对椅子中心的水平方向”来认，不依赖 prefab 的朝向。
     /// </summary>
-    void FindGuitarBesideChair(Transform chair, out Vector3 pos, out float yaw, out Vector3 leanTo)
+    void FindGuitarOnChair(Transform chair, out Vector3 seat, out Vector3 backDir, out float yaw)
     {
         var b = chair ? L2.BoundsOf(chair)
-            : new Bounds(new Vector3(-17.10f, 3.6f, -91.10f), new Vector3(1.0f, 1.0f, 1.0f));
+            : new Bounds(new Vector3(-17.10f, 3.60f, -91.10f), new Vector3(1.05f, 1.15f, 1.05f));
         Vector3 c = b.center;
-        c.y = FloorY;
 
-        // 小房间的门：进门能看见的那一侧优先
-        var door = L2.Find("BP_Door_Inside_A6");
-        Vector3 towardDoor = door ? door.position - c : Vector3.back;
-        towardDoor.y = 0f;
-        if (towardDoor.sqrMagnitude < .01f) towardDoor = Vector3.back;
-        towardDoor.Normalize();
-
-        var dirs = new List<Vector3>
+        // 靠背方向：这张沙发只有一块整体网格（SM_Chair_B1），
+        // “哪个方向的渲染器更高”这类判据在这里全失效，所以直接看网格顶点：
+        // 把高过座面一大截的顶点（靠背 + 两侧扶手）求个平均位置，
+        // 扶手左右对称会互相抵消，剩下的就是靠背的方向。
+        backDir = Vector3.back;
+        if (chair)
         {
-            new Vector3(-.707f, 0f, -.707f), Vector3.back, Vector3.left,
-            new Vector3(.707f, 0f, -.707f),
-            new Vector3(-.707f, 0f, .707f), Vector3.right,
-            new Vector3(.707f, 0f, .707f), Vector3.forward,
-        };
-        dirs.Sort((x, y) => Vector3.Dot(y, towardDoor).CompareTo(Vector3.Dot(x, towardDoor)));
-
-        foreach (var dir in dirs)
-        {
-            float edge = Mathf.Abs(dir.x) * b.extents.x + Mathf.Abs(dir.z) * b.extents.z;
-            foreach (float gap in new[] { .26f, .33f, .20f })
+            float highCut = b.min.y + b.size.y * .68f;
+            Vector3 meshSum = Vector3.zero;
+            int meshN = 0;
+            foreach (var mf in chair.GetComponentsInChildren<MeshFilter>(true))
             {
-                Vector3 p = new Vector3(c.x + dir.x * (edge + gap), FloorY, c.z + dir.z * (edge + gap));
-                if (!OnFloor(p, out p.y)) continue;
-                if (!ClearAround(p, chair)) continue;
-
-                pos = p;
-                // 琴面朝着沙发：yaw 让模型正面指向沙发，再叠一个模型自己的偏转。
-                Vector3 toChair = -dir;
-                yaw = Mathf.Atan2(toChair.x, toChair.z) * Mathf.Rad2Deg - 12f;
-                leanTo = toChair;
-                Debug.Log($"[谜题二] 沙发边找到位置 {L2.Fmt(p)}（方向 {L2.Fmt(dir)}，离沙发 {gap:F2}m）");
-                return;
+                if (!mf || !mf.sharedMesh) continue;
+                var m = mf.transform.localToWorldMatrix;
+                var vs = mf.sharedMesh.vertices;
+                for (int i = 0; i < vs.Length; i += 2)          // 隔一个取一个，够用
+                {
+                    Vector3 w = m.MultiplyPoint3x4(vs[i]);
+                    if (w.y < highCut) continue;
+                    meshSum += w;
+                    meshN++;
+                }
             }
+
+            if (meshN > 8)
+            {
+                Vector3 dd = meshSum / meshN - c;
+                dd.y = 0f;
+                if (dd.sqrMagnitude > .0025f) backDir = dd.normalized;
+            }
+            else
+            {
+                // 顶点也取不到（网格不在 MeshFilter 上）时，退回“离哪面墙最近”。
+                float nearest = 99f;
+                foreach (var d in new[]
+                {
+                    Vector3.forward, Vector3.back, Vector3.right, Vector3.left,
+                    new Vector3(.707f, 0f, .707f), new Vector3(-.707f, 0f, .707f),
+                    new Vector3(.707f, 0f, -.707f), new Vector3(-.707f, 0f, -.707f),
+                })
+                {
+                    float ext = Mathf.Abs(d.x) * b.extents.x + Mathf.Abs(d.z) * b.extents.z;
+                    Vector3 p = new Vector3(c.x + d.x * (ext + .06f), b.min.y + .12f, c.z + d.z * (ext + .06f));
+                    if (!Physics.Raycast(p, d, out var wh, 1.8f,
+                            Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)) continue;
+                    if (!IsWall(wh.transform.name)) continue;
+                    if (wh.distance < nearest) { nearest = wh.distance; backDir = d; }
+                }
+            }
+            Debug.Log($"[谜题二] 靠背判定：顶点 {meshN} 个 → 方向 {L2.Fmt(backDir)}");
+        }
+        backDir.y = 0f;
+        if (backDir.sqrMagnitude < .01f) backDir = Vector3.back;
+        backDir.Normalize();
+
+        float extent = Mathf.Abs(backDir.x) * b.extents.x + Mathf.Abs(backDir.z) * b.extents.z;
+
+        // 坐垫面：从座位前部正上方竖着往下打，第一个命中这张椅子的点就是座面高度。
+        Vector3 probe = new Vector3(c.x - backDir.x * extent * .38f, b.max.y + .30f,
+                                    c.z - backDir.z * extent * .38f);
+        float seatY = b.min.y + b.size.y * .38f;
+        if (Physics.Raycast(probe, Vector3.down, out var hit, b.size.y + 1.5f,
+                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+        {
+            bool mine = chair && hit.transform && (hit.transform == chair || hit.transform.IsChildOf(chair));
+            if (mine && hit.point.y > b.min.y + .10f && hit.point.y < b.min.y + b.size.y * .72f)
+                seatY = hit.point.y;
         }
 
-        // 兜底：沙发正前方 0.4m，朝着门
-        pos = new Vector3(c.x + towardDoor.x * (b.extents.x + .40f), FloorY,
-                          c.z + towardDoor.z * (b.extents.z + .40f));
-        yaw = Mathf.Atan2(-towardDoor.x, -towardDoor.z) * Mathf.Rad2Deg;
-        leanTo = -towardDoor;
-        Debug.LogWarning("[谜题二] 沙发边没找到空位，退回沙发前方");
+        seat = new Vector3(probe.x, seatY, probe.z);
+        yaw = Mathf.Atan2(-backDir.x, -backDir.z) * Mathf.Rad2Deg;   // 琴面朝外（开口方向）
+        Debug.Log($"[谜题二] 沙发中心 {L2.Fmt(c)} 尺寸 {L2.Fmt(b.size)} → 坐垫面 y={seatY:F3}，靠背朝 {L2.Fmt(backDir)}");
     }
 
-    /// <summary>这个点上脚下是不是二楼地板（打到沙发/家具顶面不算）。</summary>
-    bool OnFloor(Vector3 p, out float y)
-    {
-        y = FloorY;
-        if (!Physics.Raycast(p + Vector3.up * .55f, Vector3.down, out var hit, 1.0f,
-                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)) return false;
-        if (Mathf.Abs(hit.point.y - FloorY) > .07f) return false;
-        y = hit.point.y;
-        return true;
-    }
-
-    /// <summary>
-    /// 这个点上立一把琴，四周有没有空。
-    /// 用球形扫描（SphereCast 对 MeshCollider 是按真实网格求交的），沙发本身允许挨着 ——
-    /// 琴就是要靠在它上面。
-    /// </summary>
-    bool ClearAround(Vector3 p, Transform chair)
-    {
-        var dirs = new[]
-        {
-            Vector3.forward, Vector3.back, Vector3.right, Vector3.left,
-            new Vector3(.707f, 0f, .707f), new Vector3(-.707f, 0f, .707f),
-            new Vector3(.707f, 0f, -.707f), new Vector3(-.707f, 0f, -.707f),
-        };
-        foreach (float h in new[] { .35f, .80f })
-        {
-            Vector3 o = p + Vector3.up * h;
-            foreach (var d in dirs)
-            {
-                if (!Physics.SphereCast(o, .15f, d, out var hit, .30f,
-                        Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)) continue;
-                var t = hit.transform;
-                if (chair && t && t.IsChildOf(chair)) continue;      // 沙发可以贴
-                if (hit.point.y <= p.y + .06f) continue;             // 地毯这种贴地薄片
-                return false;
-            }
-        }
-        return true;
-    }
+    static bool IsWall(string n) =>
+        !string.IsNullOrEmpty(n) && (n.Contains("Wall") || n.Contains("Corner"));
 
     public void PlaceGuitar(PlayerInventory inv)
     {
@@ -506,7 +521,13 @@ public sealed class Level2Toys : MonoBehaviour
         AttachGuitar(item);
     }
 
-    /// <summary>把吉他搬到沙发上靠好（放置和读档共用这一段）。</summary>
+    /// <summary>
+    /// 把吉他竖着搁在沙发座面上、琴背靠着靠背（放置和读档共用这一段）。
+    /// 目标是现实里“随手把琴往沙发上一靠”的样子：
+    ///   · 琴身（大的那一头）在下，坐在坐垫面上；
+    ///   · 琴颈朝上，略微后仰，琴背贴着靠背；
+    ///   · 琴面朝向房间，不横穿左右扶手。
+    /// </summary>
     void AttachGuitar(PickupItem item)
     {
         if (!item || !guitarSpot) return;
@@ -514,43 +535,36 @@ public sealed class Level2Toys : MonoBehaviour
         item.transform.SetParent(null, true);
         item.gameObject.SetActive(true);
 
-        Vector3 toChair = guitarSpot.leanTo;
-        toChair.y = 0f;
-        if (toChair.sqrMagnitude < .001f) toChair = Vector3.forward;
-        toChair.Normalize();
+        Vector3 backDir = guitarSpot.backDir;
+        backDir.y = 0f;
+        if (backDir.sqrMagnitude < .001f) backDir = Vector3.forward;
+        backDir.Normalize();
 
-        // 模型在场景里本来就是“靠着墙立着”的姿态（琴身在下、琴颈朝上），
-        // 所以不要去搜什么“最高的姿态”，只调方位角：
-        // 挑一个让琴的薄边朝向沙发的角度 —— 琴背贴沙发、琴面朝外。
-        // （这里用 WorldBoundsFast：同一帧里改完旋转，renderer.bounds 还没刷新。）
+        // 这个模型是“竖着靠墙”摆的：琴身在下、琴颈朝上略向后倾，琴面朝外、琴背朝里。
+        // 只绕竖直轴把“琴背”转到椅子的靠背方向，那点后仰原样保留 —— 正好就是“靠着”的样子。
+        // （不要再去反解视觉层的局部旋转：那 61° 是这个模型转正所必需的，抹掉琴就躺平了。）
         Quaternion orig = item.transform.rotation;
-        Quaternion upright = orig;
-        float bestThin = float.MaxValue;
-        float toChairYaw = Mathf.Atan2(toChair.x, toChair.z) * Mathf.Rad2Deg;
-        for (int d = 0; d < 360; d += 10)
-        {
-            item.transform.rotation = Quaternion.AngleAxis(d, Vector3.up) * orig;
-            var b = WorldBoundsFast(item.transform);
-            float thin = Mathf.Abs(toChair.x) * b.size.x + Mathf.Abs(toChair.z) * b.size.z;
-            if (thin < bestThin - .002f) { bestThin = thin; upright = item.transform.rotation; }
-        }
+        float delta = Mathf.Atan2(backDir.x, backDir.z) * Mathf.Rad2Deg - 180f;
+        item.transform.rotation = Quaternion.AngleAxis(delta, Vector3.up) * orig;
 
-        // 再往沙发那边斜 8°，让“靠着”看得出来；真正的接触距离由下面的贴靠步骤补。
-        Quaternion lean = Quaternion.AngleAxis(8f, Vector3.Cross(toChair, Vector3.up).normalized);
-        item.transform.rotation = lean * upright;
-        Debug.Log($"[谜题二] 吉他立姿 方位 {toChairYaw:F0}° 薄边 {bestThin:F2}m");
+        var rawB = WorldBoundsFast(item.transform);
+        Debug.Log($"[谜题二] 吉他姿态：琴背 -Z → 靠背 {L2.Fmt(backDir)}（转 {delta:F0}°），" +
+                  $"包围盒 {L2.Fmt(rawB.size)} 高 {rawB.size.y:F2}m");
 
-        Vector3 at = guitarSpot.transform.position;
-        item.transform.position = at;
-        AlignBottom(item.transform, at);
+        // 落点：座位点往靠背方向挪 30cm，挪到坐垫中间偏后。
+        // 原来的座位点取在坐垫前缘（离靠背 0.34m），琴有一半在坐垫外面，
+        // 底部就悬在椅子前面的空气里 —— 这才是“虚空放置”的真正原因。
+        Vector3 seat = guitarSpot.transform.position + backDir * .30f;
 
-        // 自己的碰撞体先关掉，免得下面探测的时候打到自己。
+        // 先把碰撞体关掉，再往下量坐垫：不然射线第一个打到的就是琴自己。
         foreach (var c in item.GetComponentsInChildren<Collider>(true)) c.enabled = false;
+
+        item.transform.position = seat;
+        AlignBottomFast(item.transform, SeatSurfaceAt(seat));
         Physics.SyncTransforms();
 
-        // 贴靠 + 落地放到下一帧做：这一帧里 renderer.bounds 还是旧值，
-        // 当场量包围盒会把琴“贴”到半空去。
-        StartCoroutine(ContactSettle(item.transform, toChair));
+        // 贴靠 + 重新落座放到下一帧做：这一帧里 renderer.bounds 还是旧值。
+        StartCoroutine(ContactSettle(item.transform, backDir));
 
         var outline = item.GetComponentInChildren<ProximityOutline>(true);
         if (outline) outline.enabled = false;
@@ -558,7 +572,25 @@ public sealed class Level2Toys : MonoBehaviour
         if (pick) pick.enabled = false;
 
         guitarSpot.filled = true;
+        if (guitarSpot.hint) guitarSpot.hint.SetVisible(false);
+        GameAudio.PlayPlace();
         OnAllDone();
+    }
+
+    /// <summary>单个渲染器立刻能用的世界包围盒（局部包围盒 × 变换矩阵，不等一帧）。</summary>
+    static Bounds FastBounds(Renderer r)
+    {
+        var lb = r.localBounds;
+        var m = r.transform.localToWorldMatrix;
+        Vector3 c = m.MultiplyPoint3x4(lb.center);
+        Vector3 ex = m.MultiplyVector(new Vector3(lb.extents.x, 0f, 0f));
+        Vector3 ey = m.MultiplyVector(new Vector3(0f, lb.extents.y, 0f));
+        Vector3 ez = m.MultiplyVector(new Vector3(0f, 0f, lb.extents.z));
+        Vector3 e = new Vector3(
+            Mathf.Abs(ex.x) + Mathf.Abs(ey.x) + Mathf.Abs(ez.x),
+            Mathf.Abs(ex.y) + Mathf.Abs(ey.y) + Mathf.Abs(ez.y),
+            Mathf.Abs(ex.z) + Mathf.Abs(ey.z) + Mathf.Abs(ez.z));
+        return new Bounds(c, e * 2f);
     }
 
     /// <summary>
@@ -572,66 +604,93 @@ public sealed class Level2Toys : MonoBehaviour
         foreach (var r in t.GetComponentsInChildren<Renderer>(true))
         {
             if (!r || !r.enabled) continue;
-            var lb = r.localBounds;
-            var m = r.transform.localToWorldMatrix;
-            Vector3 c = m.MultiplyPoint3x4(lb.center);
-            Vector3 ex = m.MultiplyVector(new Vector3(lb.extents.x, 0f, 0f));
-            Vector3 ey = m.MultiplyVector(new Vector3(0f, lb.extents.y, 0f));
-            Vector3 ez = m.MultiplyVector(new Vector3(0f, 0f, lb.extents.z));
-            Vector3 e = new Vector3(
-                Mathf.Abs(ex.x) + Mathf.Abs(ey.x) + Mathf.Abs(ez.x),
-                Mathf.Abs(ex.y) + Mathf.Abs(ey.y) + Mathf.Abs(ez.y),
-                Mathf.Abs(ex.z) + Mathf.Abs(ey.z) + Mathf.Abs(ez.z));
-            var nb = new Bounds(c, e * 2f);
+            var nb = FastBounds(r);
             if (!has) { total = nb; has = true; } else total.Encapsulate(nb);
         }
         return has ? total : new Bounds(t.position, Vector3.zero);
     }
 
-    Vector3 FloorPoint(Transform t)
+    /// <summary>这个位置正下方的坐垫面高度（压 1.2cm 进软垫）。打不到椅子就退回座位点的高度。</summary>
+    float SeatSurfaceAt(Vector3 p)
     {
-        float y = guitarSpot ? guitarSpot.transform.position.y : FloorY;
-        return new Vector3(t.position.x, y, t.position.z);
+        float top = guitarSpot.seatY + .55f;
+        if (chair && Physics.Raycast(new Vector3(p.x, top, p.z), Vector3.down, out var hit, 1.6f,
+                Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+        {
+            if (hit.transform && (hit.transform == chair || hit.transform.IsChildOf(chair)))
+                return hit.point.y - .012f;
+        }
+        return guitarSpot.seatY - .012f;
     }
 
-    /// <summary>把琴往沙发那边推到刚刚碰到，再让琴脚落回地板。</summary>
-    System.Collections.IEnumerator ContactSettle(Transform t, Vector3 toChair)
+    /// <summary>
+    /// 让琴坐在坐垫上、琴背搭住靠背。
+    /// 不再拿“整把琴的包围盒”去估算背面 —— 琴颈本来就向后仰，包围盒会把琴颈那截
+    /// 也算成“琴背伸出去”，于是把整把琴一路往后推，最后推到坐垫外面吊在半空。
+    /// 这里按高度一层一层采网格顶点，看每一层琴真正探出去多远，再跟靠背的实际位置比。
+    /// </summary>
+    System.Collections.IEnumerator ContactSettle(Transform t, Vector3 backDir)
     {
-        yield return null;                                   // 等包围盒刷新
+        yield return null;
         if (!t) yield break;
-        AlignBottom(t, FloorPoint(t));
-        Physics.SyncTransforms();
-        yield return null;
 
-        var gb = L2.BoundsOf(t);
-        float reach = Mathf.Abs(toChair.x) * gb.extents.x + Mathf.Abs(toChair.z) * gb.extents.z;
-
-        // 单一高度会从扶手和靠背之间的缝里漏过去，所以在四个高度各探一次，取最近的那次。
-        float nearest = -1f;
-        foreach (float h in new[] { .28f, .48f, .68f, .88f })
-        {
-            Vector3 o = new Vector3(gb.center.x, FloorY + h, gb.center.z);
-            if (!Physics.Raycast(o, toChair, out var hit, 1.10f,
-                    Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)) continue;
-            if (hit.point.y <= FloorY + .05f) continue;      // 打到地板不算
-            float gap = hit.distance - reach;
-            if (nearest < 0f || gap < nearest) nearest = gap;
-        }
-
+        Vector3 center = guitarSpot.transform.position;
         float moved = 0f;
-        if (nearest >= 0f)
+
+        for (int iter = 0; iter < 3; iter++)
         {
-            moved = Mathf.Clamp(nearest - .012f, -.30f, .45f);
-            if (Mathf.Abs(moved) > .004f) t.position += toChair * moved;
+            float surface = SeatSurfaceAt(t.position);
+            AlignBottomFast(t, surface);              // 压进软垫 1.2cm，看着是“坐实”而不是浮着
+            Physics.SyncTransforms();
+
+            float bottom = WorldBoundsFast(t).min.y;
+            float shift = 0f;
+            foreach (float h in new[] { .10f, .24f, .38f, .52f, .66f, .78f })
+            {
+                float y = bottom + h;
+                if (!Physics.Raycast(new Vector3(center.x, y, center.z), backDir, out var hit, 1.20f,
+                        Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore)) continue;
+                if (!chair || !hit.transform || !(hit.transform == chair || hit.transform.IsChildOf(chair))) continue;
+
+                float reach = MaxReachAt(t, backDir, y, center);
+                if (float.IsNegativeInfinity(reach)) continue;
+                float over = reach - (hit.distance - .012f);   // 留 1.2cm，别顶穿椅背
+                if (over > shift) shift = over;
+            }
+
+            if (shift <= .002f) break;
+            float step = Mathf.Min(shift, .10f);               // 退让量封顶，绝不让琴退出坐垫
+            moved += step;
+            t.position -= backDir * step;
+            AlignBottomFast(t, SeatSurfaceAt(t.position));
+            Physics.SyncTransforms();
+            yield return null;
         }
 
-        yield return null;
-        AlignBottom(t, FloorPoint(t));
-        Physics.SyncTransforms();
+        var f = WorldBoundsFast(t);
+        Debug.Log($"[谜题二] 吉他上了沙发 {L2.Fmt(t.position)} 尺寸 {L2.Fmt(f.size)} " +
+                  $"底 y={f.min.y:F3}（坐垫面 {SeatSurfaceAt(t.position):F3}），离靠背退让 {moved:F3}m");
+    }
 
-        var f = L2.BoundsOf(t);
-        Debug.Log($"[谜题二] 吉他归位 {L2.Fmt(t.position)} 包围盒 {L2.Fmt(f.size)} 底 y={f.min.y:F3} " +
-                  $"往沙发贴了 {moved:F3}m（探到的最近间隙 {(nearest >= 0f ? nearest : -1f):F3}）");
+    /// <summary>这一层高度上，琴沿 dir 最远探到哪儿（相对 origin）。用网格顶点算，比包围盒准得多。</summary>
+    static float MaxReachAt(Transform t, Vector3 dir, float y, Vector3 origin)
+    {
+        float best = float.NegativeInfinity;
+        foreach (var mf in t.GetComponentsInChildren<MeshFilter>(true))
+        {
+            if (!mf || !mf.sharedMesh) continue;
+            var m = mf.transform.localToWorldMatrix;
+            var vs = mf.sharedMesh.vertices;
+            int step = Mathf.Max(1, vs.Length / 4000);
+            for (int i = 0; i < vs.Length; i += step)
+            {
+                Vector3 w = m.MultiplyPoint3x4(vs[i]);
+                if (Mathf.Abs(w.y - y) > .055f) continue;
+                float p = (w.x - origin.x) * dir.x + (w.z - origin.z) * dir.z;
+                if (p > best) best = p;
+            }
+        }
+        return best;
     }
 
     void OnAllDone()
@@ -689,6 +748,12 @@ public sealed class Level2Toys : MonoBehaviour
 
         placedAll = p[1] == "1" || AllSpotsFilled();
 
+        // 读档时可能根本没走过“四个玩偶归位”，吉他还是光模型、没有拾取外壳。
+        // 先把外壳补上，否则下面按 id 找 PickupItem 会拿到 null，吉他既拿不起来也放不回去。
+        if (guitarTaken && guitar && !guitar.GetComponentInChildren<PickupItem>(true))
+            guitar = L2.WrapPickup(guitar, "破损的吉他", "l2_guitar", "乐器", .3f, .3f,
+                "断了两根弦的旧吉他，琴身上还有小时候贴的贴纸。");
+
         var inv = FindObjectOfType<PlayerInventory>();
         if (inv)
         {
@@ -702,7 +767,9 @@ public sealed class Level2Toys : MonoBehaviour
         }
         foundAll = foundAll || washed.Count > 0 || placedAll;
 
-        if (guitarPlaced) { BuildGuitarSpot(); RestoreGuitar(); }
+        // 拿到过吉他就要把放置点建出来 —— 否则“拿了没放”的存档读回来，玩家找不到地方放。
+        if (guitarTaken) BuildGuitarSpot();
+        if (guitarPlaced) RestoreGuitar();
 
         Debug.Log($"[谜题二] 读档恢复：洗了 {washed.Count} 个，摆了 {PlacedCount()} 个，吉他 {guitarTaken}/{guitarPlaced}");
     }
@@ -749,7 +816,10 @@ public sealed class Level2Toys : MonoBehaviour
     void RestoreGuitar()
     {
         if (!guitar || !guitarSpot) return;
+        // 读档时 guitar 已经被换成 WrapPickup 建的外壳，PickupItem 挂在外壳自己身上，
+        // GetComponentInChildren 找不到（会直接 return，吉他就不见了）。
         var pick = guitar.GetComponentInChildren<PickupItem>(true);
+        if (!pick) pick = guitar.GetComponentInParent<PickupItem>();
         if (!pick) return;
         AttachGuitar(pick);
     }
@@ -807,6 +877,10 @@ public sealed class Level2Toys : MonoBehaviour
             if (!s || !s.hint) continue;
             s.hint.SetVisible(show && !s.filled);
         }
+
+        // 吉他：四个玩偶摆好、琴也拿到手了，沙发上那个位置才亮。
+        if (guitarSpot && guitarSpot.hint)
+            guitarSpot.hint.SetVisible(placedAll && guitarTaken && !guitarPlaced);
     }
 }
 
@@ -873,13 +947,15 @@ public sealed class Level2ToySpot : L2Interactable
     }
 }
 
-/// <summary>吉他归位点（二楼一号房 · 一号小房间的沙发旁边）。</summary>
+/// <summary>吉他归位点（二楼一号房 · 一号小房间的那张沙发）。</summary>
 public sealed class Level2GuitarSpot : L2Interactable
 {
     public Level2Toys host;
     public bool filled;
     public float yaw;
-    public Vector3 leanTo = Vector3.back;
+    public Vector3 backDir = Vector3.back;   // 指向靠背的水平方向
+    public float seatY = 3.62f;              // 坐垫面高度
+    public Level2SpotHint hint;
 
     public override string Prompt
     {
@@ -887,8 +963,8 @@ public sealed class Level2GuitarSpot : L2Interactable
         {
             if (filled) return "吉他放好了";
             var inv = FindObjectOfType<PlayerInventory>();
-            if (inv && inv.HasItem("l2_guitar")) return "E 把吉他靠在沙发上";
-            return "沙发边的空位";
+            if (inv && inv.HasItem("l2_guitar")) return "E 把吉他放到沙发上";
+            return "沙发上的空位";
         }
     }
 
@@ -896,7 +972,7 @@ public sealed class Level2GuitarSpot : L2Interactable
     {
         if (!host || filled) return;
         var ui = Level2Director.Instance ? Level2Director.Instance.Ui : null;
-        if (!inv.HasItem("l2_guitar")) { ui?.Note("吉他", "这里正好可以把吉他靠在沙发边。"); return; }
+        if (!inv.HasItem("l2_guitar")) { ui?.Note("吉他", "把吉他搁在这张沙发上、靠着靠背摆好。"); return; }
         host.PlaceGuitar(inv);
     }
 }

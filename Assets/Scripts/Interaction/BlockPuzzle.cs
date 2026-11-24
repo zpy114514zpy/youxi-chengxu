@@ -251,6 +251,7 @@ public sealed class BlockPuzzle : MonoBehaviour
         }
         var item = owner ? owner.TakeBlock() : null;
         if (!item) return;
+        GameAudio.PlayPlace();
         StartCoroutine(PlaceRoutine(item.gameObject));
     }
 

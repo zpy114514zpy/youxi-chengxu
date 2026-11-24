@@ -320,6 +320,30 @@ public sealed class Level2Director : MonoBehaviour
         // FutureFog 在 PlayerController.Start 里才设雾，这里每隔几秒把它盖回“屋里清楚、屋外白雾”。
         fogTimer -= Time.deltaTime;
         if (fogTimer <= 0f) { fogTimer = 2.5f; ApplyFog(); }
+
+        CheckDownstairs();
+    }
+
+    // ---------------- 下楼 ----------------
+
+    bool wasUpstairs, downstairsNoticed;
+
+    /// <summary>
+    /// 玩家第一次从二楼走楼梯下到客厅时给一句提示。
+    /// 高度判定就够了：这栋房子只有那道楼梯能下楼，二楼地板 3.20、一楼地面 0。
+    /// 只提示一次；读档直接落在一楼时 wasUpstairs 还是 false，不会误触发。
+    /// </summary>
+    void CheckDownstairs()
+    {
+        if (downstairsNoticed || !Player) return;
+
+        float y = Player.position.y;
+        if (y > 3.0f) { wasUpstairs = true; return; }
+        if (!wasUpstairs || y > 1.45f) return;
+
+        downstairsNoticed = true;
+        Ui?.Say("", "客厅里，好像多了一个东西。");
+        Debug.Log($"[第二关] 下到一楼 {L2.Fmt(Player.position)}，弹出提示");
     }
 
     void ApplyFog()

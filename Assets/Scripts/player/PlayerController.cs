@@ -37,6 +37,12 @@ public class PlayerController : MonoBehaviour
     float pickupUntil, pickupDuration;
     int playing;
 
+    // ---- 脚步声 ----
+    // 脚步声不能按“在走/不在走”开关循环播放：那段音频里一秒才一步，和 2 m/s 的走速完全脱节。
+    // 改成累计实际走过的位移，每满一步响一次 —— 走多快就响多快，停下就没声。
+    Vector3 lastWalkPos;
+    bool walkTracked;
+
     // ---- 站在可踩物（凳子）上的状态 ----
     // 角色是带重力的动力学刚体，凳子又不在 Ground 层，光瞬移上去会被重力立刻拽回地面
     // （表现为“按 E 后往下掉，站在凳子边而不是中心”）。所以站上去时由这里接管：
@@ -110,9 +116,18 @@ public class PlayerController : MonoBehaviour
     void Update()
     {
         if(UiInputBlocker.Active || StoryProgress.Instance && StoryProgress.Instance.IsReading)
-        {direction=Vector3.zero;pushHeld=false;return;}
+        {
+            direction=Vector3.zero;pushHeld=false;
+            GameAudio.SetWalking(false);GameAudio.SetPushing(false);
+            return;
+        }
         UpdateCrouch();
-        if(inventory && inventory.IsOpen){direction=Vector3.zero;pushHeld=false;return;}
+        if(inventory && inventory.IsOpen)
+        {
+            direction=Vector3.zero;pushHeld=false;
+            GameAudio.SetWalking(false);GameAudio.SetPushing(false);
+            return;
+        }
         Transform basis = orientation;
         if (!basis && Camera.main) basis = Camera.main.transform;
         Vector3 forward = basis ? Vector3.ProjectOnPlane(basis.forward, Vector3.up).normalized : Vector3.forward;
@@ -158,7 +173,13 @@ public class PlayerController : MonoBehaviour
     void FixedUpdate()
     {
         float dt = Time.fixedDeltaTime;
-        if (platformLock) { UpdatePlatform(dt); return; }
+        if (platformLock)
+        {
+            GameAudio.SetWalking(false);
+            GameAudio.SetPushing(false);
+            UpdatePlatform(dt);
+            return;
+        }
         Bounds bounds = capsule.bounds;
         // Probe a footprint so a seam between two floor tiles does not interrupt walking.
         float radius = Mathf.Min(bounds.extents.x, bounds.extents.z) * 0.8f;
@@ -207,6 +228,18 @@ public class PlayerController : MonoBehaviour
         body.velocity = horizontal + Vector3.up * vertical;
         body.AddForce(Physics.gravity * (gravityMultiplier - 1f), ForceMode.Acceleration);
         Play(taking ? Pickup : pushing ? Push : moving ? Walk : Idle);
+        // 推东西 / 走路的声音：推的时候循环推声；走路按实际走过的距离，一步一响。
+        GameAudio.SetPushing(pushing);
+        bool walking = moving && grounded && !taking && !pushing;
+        GameAudio.SetWalking(walking);
+        if (walking)
+        {
+            if (!walkTracked) { lastWalkPos = body.position; walkTracked = true; }
+            Vector3 stepped = Vector3.ProjectOnPlane(body.position - lastWalkPos, Vector3.up);
+            lastWalkPos = body.position;
+            GameAudio.AddWalkDistance(stepped.magnitude);
+        }
+        else walkTracked = false;
         animator.speed = playing == Idle ? 0f : 1f;
         firstPerson?.SetInteraction(taking || pushing);
         // 推的时候把目标交给视角层，由它把双手按在物体表面（物体移动、手跟着移动）。
