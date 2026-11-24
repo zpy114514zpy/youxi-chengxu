@@ -35,6 +35,9 @@ public sealed class PlayerInventory : MonoBehaviour
         // 抽屉里的东西总是先撞到柜板，所以“能捡的道具”单独记一份，最后让它优先于抽屉/柜门。
         PickupItem reachableItem=null;
         float reachableItemDistance=float.MaxValue;
+        // 准星最近一次撞到的柜门/抽屉面板：面板没打开时不允许隔着它捡东西。
+        FurnitureOpenable blockFurniture=null;
+        float blockFurnitureDistance=float.MaxValue;
         // 用带半径的球扫而不是细射线：信封碎片、相册这类又薄又小的东西，
         // 细射线很容易从边上擦过去，玩家明明瞄准了却按不出提示。
         foreach(var hit in Physics.SphereCastAll(cam.transform.position,.085f,cam.transform.forward,reach,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore))
@@ -42,6 +45,7 @@ public sealed class PlayerInventory : MonoBehaviour
             if(hit.collider.transform.IsChildOf(transform)||hit.distance>=reach)continue;
             var door=hit.collider.GetComponentInParent<InteractiveDoor>();
             var furniture=hit.collider.GetComponentInParent<FurnitureOpenable>();
+            if(furniture&&hit.distance<blockFurnitureDistance){blockFurnitureDistance=hit.distance;blockFurniture=furniture;}
             var placement=hit.collider.GetComponentInParent<StoryPlacement>();
             var readable=hit.collider.GetComponentInParent<ReadableClue>();
             var item=hit.collider.GetComponentInParent<PickupItem>();
@@ -91,10 +95,16 @@ public sealed class PlayerInventory : MonoBehaviour
             else if(l2){target=l2;prompt=l2.Prompt;}
         }
         // 道具优先：站在抽屉/柜子前面时，只要里面那件东西够得着，就按“拾取”而不是“开抽屉”。
+        // 但门板/抽屉面板还没打开时不许越过它 —— 否则玩家能隔着关着的柜门把里面的玩偶拿走。
         if(reachableItem&&reachableItemDistance<=nearest+.75f)
         {
-            target=reachableItem;
-            prompt="E 拾取 "+reachableItem.displayName;
+            bool behindClosedPanel=blockFurniture&&blockFurniture.OpenAmount<.35f
+                &&blockFurnitureDistance<reachableItemDistance-.02f;
+            if(!behindClosedPanel)
+            {
+                target=reachableItem;
+                prompt="E 拾取 "+reachableItem.displayName;
+            }
         }
         // 坐着的时候椅子自己的碰撞体是关着的（不然角色会被物理系统顶出椅面），准星扫不到它；
         // 这里把交互目标强行指回椅子，否则坐下之后就再也按不了 E 起身。
@@ -139,18 +149,56 @@ public sealed class PlayerInventory : MonoBehaviour
         }
     }
     /// <summary>
-    /// 这个东西该不该允许拾取：
-    /// 只放行当前剧情要用的——信封碎片、积木、二号房间钥匙，以及“还没摆好”的归位谜题要的道具。
-    /// 其余（装饰玩具、书、已经摆到床上的玩偶）都不再提示拾取。
+    /// 当前进行到第几个解密。用“已拿到的信封碎片”推断：碎片是每关唯一、顺序固定的产物，
+    /// 比另开一个状态字段更可靠（读档、回看、重进场景都不会错位）。
+    /// 1=玩偶归位 2=积木 3=密码箱 4=二号房间整理 5=客厅时钟 6=碎片集齐（只剩放置）
+    /// </summary>
+    static int PuzzleStage
+    {
+        get
+        {
+            var story=StoryProgress.Instance;
+            if(!story)return 1;
+            if(story.fragments.Contains("信封碎片⑤"))return 6;
+            if(story.fragments.Contains("信封碎片④"))return 5;
+            if(story.fragments.Contains("信封碎片③"))return 4;
+            if(story.fragments.Contains("信封碎片②"))return 3;
+            if(story.fragments.Contains("信封碎片①"))return 2;
+            return 1;
+        }
+    }
+
+    /// <summary>
+    /// 这个东西该不该允许拾取。
+    /// 规则：**只放行当前这个解密任务相关的东西**，别的任务的道具先不给捡
+    /// （不然玩家能提前把钥匙、积木、整理道具一股脑捞走，后面的谜题就乱了）。
+    ///   · 当前关的玩偶 / 积木 / 整理道具 / 钥匙；
+    ///   · 信封碎片：同一时刻场上只会有一片，随时可以捡；
+    ///   · 已经全部集齐之后（只剩放置），不再限制。
+    /// 装饰玩具、书这类从头到尾都不允许拾取。
     /// </summary>
     bool IsUseful(PickupItem item)
     {
         if(!item)return false;
         string id=item.storyId??"";
-        if(id.StartsWith("letter_fragment")||id.StartsWith("block_")||id=="room2_key")return true;
-        if(id.StartsWith("tidy_"))return true;
-        if(id.StartsWith("l2_"))return true;              // 第二关的道具（相片残片 / 玩偶 / 吉他）
         if(id.Length==0)return false;
+        if(id.StartsWith("l2_"))return true;              // 第二关的道具不设门槛
+        if(id.StartsWith("letter"))return true;           // 信封碎片：当前关的产物
+
+        switch(PuzzleStage)
+        {
+            case 1: return NeededByPlacement(id);          // 只认这一关要归位的四只玩偶
+            case 2: return id.StartsWith("block_");        // 积木
+            case 3: return false;                          // 密码箱：没有可拾取的道具
+            case 4: return id=="room2_key"||id.StartsWith("tidy_");   // 钥匙 + 二号房间整理
+            case 5: return false;                          // 客厅时钟：没有可拾取的道具
+            default: return true;                          // 碎片集齐，只剩放置
+        }
+    }
+
+    /// <summary>这件道具是不是某个还没摆好的归位点正等着的。</summary>
+    bool NeededByPlacement(string id)
+    {
         if(placements==null||Time.unscaledTime>placementRefresh)
         {
             placements=FindObjectsOfType<StoryPlacement>();

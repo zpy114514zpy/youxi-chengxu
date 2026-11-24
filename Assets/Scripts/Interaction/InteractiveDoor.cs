@@ -13,12 +13,14 @@ public sealed class InteractiveDoor : MonoBehaviour
     void Awake(){hinge=transform.TransformPoint(hingeLocal);}
     public void Toggle(Vector3 playerPosition)
     {
-        if(Mathf.Abs(target)>.1f){target=0;flipped=false;return;}
+        // 关门：音调压低一点；开门：原声。玩家一按 E 就响，不用等门转到位。
+        if(Mathf.Abs(target)>.1f){target=0;flipped=false;GameAudio.PlayDoor(.88f,.80f);return;}
         var r=GetComponentInChildren<Renderer>();
         Vector3 away=r.bounds.center-playerPosition;
         Vector3 tangent=Vector3.Cross(Vector3.up,r.bounds.center-hinge);
         target=Vector3.Dot(tangent,away)>=0?openAngle:-openAngle;
         flipped=false;
+        GameAudio.PlayDoor(1f,.85f);
     }
     void FixedUpdate()
     {

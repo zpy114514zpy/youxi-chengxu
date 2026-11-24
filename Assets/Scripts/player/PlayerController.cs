@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
 
 [RequireComponent(typeof(Rigidbody))]
 public class PlayerController : MonoBehaviour
@@ -244,6 +245,133 @@ public class PlayerController : MonoBehaviour
         firstPerson?.SetInteraction(taking || pushing);
         // 推的时候把目标交给视角层，由它把双手按在物体表面（物体移动、手跟着移动）。
         firstPerson?.SetPush(pushing ? pushProp : null);
+        JamWatch(dt, moving);
+    }
+
+    // ---------- 卡住诊断（只打日志；矮障碍物顺便抬一下） ----------
+    // 玩家反映“某个位置走过去就被卡住”。这一步不改任何碰撞体：
+    //   · 按着方向键 0.5 秒几乎没位移 → 认定卡住；
+    //   · 卡住时朝身前做一次胶囊扫掠：如果挡路的东西很矮（≤45cm，门槛/地垫/台阶），轻轻抬过去；
+    //   · 抬不过去（墙、家具）就只打一行日志：位置 / 方向 / 挡路物体名与包围盒。
+    // 排查完把这一段删掉即可，不影响其它逻辑。
+    Vector3 jamAnchor;
+    float jamTimer;
+    float jamNextReport;
+    bool jamReported;
+
+    void JamWatch(float dt, bool moving)
+    {
+        if (!moving)
+        {
+            jamTimer = 0f; jamAnchor = body.position; jamReported = false;
+            return;
+        }
+        if (Vector3.ProjectOnPlane(body.position - jamAnchor, Vector3.up).magnitude > .05f)
+        {
+            jamAnchor = body.position; jamTimer = 0f; jamReported = false;
+            return;
+        }
+        jamTimer += dt;
+        if (jamTimer < .5f) return;
+        if (TryClimbJam()) { jamTimer = 0f; jamAnchor = body.position; return; }
+        if (jamReported || Time.time < jamNextReport) return;
+        jamReported = true;
+        jamNextReport = Time.time + 4f;
+        ReportJam();
+    }
+
+    /// <summary>前方挡路的如果是台阶级矮物（≤32cm），直接把角色抬上去。
+    /// 比 StepAssist 兜底：能处理“判定为不接地”时 StepAssist 不生效的情况；家具/凳子不抬，免得绕过谜题。</summary>
+    bool TryClimbJam()
+    {
+        Bounds b = capsule.bounds;
+        float r = Mathf.Max(.12f, Mathf.Min(b.extents.x, b.extents.z) * .85f);
+        Vector3 bottom = new Vector3(b.center.x, b.min.y + r + .02f, b.center.z);
+        Vector3 top = new Vector3(b.center.x, b.max.y - r, b.center.z);
+        Vector3 dir = Vector3.ProjectOnPlane(direction, Vector3.up);
+        if (dir.sqrMagnitude < .01f) dir = Vector3.ProjectOnPlane(transform.forward, Vector3.up);
+        if (dir.sqrMagnitude < .01f) return false;
+        dir.Normalize();
+
+        foreach (var hit in Physics.CapsuleCastAll(bottom, top, r, dir, .24f, FloorMask, QueryTriggerInteraction.Ignore))
+        {
+            if (hit.collider.transform.IsChildOf(transform)) continue;
+            if (Mathf.Abs(hit.normal.y) > .8f) continue;                 // 平地 / 天花板
+            float rise = hit.collider.bounds.max.y - b.min.y;            // 这东西顶部比脚底高多少
+            if (rise < .02f || rise > .32f) continue;                    // 只处理台阶级矮物，别把玩家抬上家具/凳子
+            Vector3 lift = Vector3.up * (rise + .03f);
+            bool blocked = false;
+            foreach (var c in Physics.OverlapCapsule(bottom + lift, top + lift, r * .92f, FloorMask,
+                         QueryTriggerInteraction.Ignore))
+            {
+                if (!c || c.isTrigger) continue;
+                if (c.transform.IsChildOf(transform) || c.attachedRigidbody == body) continue;
+                if (c.bounds.max.y <= b.min.y + rise + .02f) continue;   // 就是脚下这块，不算顶头
+                blocked = true; break;
+            }
+            if (blocked) continue;
+            body.position += lift;
+            body.velocity = new Vector3(body.velocity.x, 0f, body.velocity.z);
+            Physics.SyncTransforms();
+            Debug.Log("[卡住] " + hit.collider.name + " 挡住去路（比脚底高 " + rise.ToString("F2")
+                + "m），已抬上去：" + body.position.ToString("F2"), this);
+            return true;
+        }
+        return false;
+    }
+
+    void ReportJam()
+    {
+        var names = new List<string>();
+        Bounds b = capsule.bounds;
+        float r = Mathf.Max(.12f, Mathf.Min(b.extents.x, b.extents.z) * .85f);
+        Vector3 bottom = new Vector3(b.center.x, b.min.y + r + .02f, b.center.z);
+        Vector3 top = new Vector3(b.center.x, b.max.y - r, b.center.z);
+        Vector3 dir = Vector3.ProjectOnPlane(direction, Vector3.up);
+        if (dir.sqrMagnitude < .01f) dir = Vector3.forward;
+        dir.Normalize();
+
+        void Take(Collider c)
+        {
+            if (!c || c.isTrigger) return;
+            if (c.transform.IsChildOf(transform) || c.attachedRigidbody == body) return;
+            if (c.bounds.max.y <= b.min.y + .05f) return;                // 地板
+            var box = c as BoxCollider;
+            // 这套房屋模型里有些预制体的 BoxCollider 尺寸是负的（导出时就坏了），
+            // 负尺寸的盒子在 PhysX 里行为不可预期，常常表现成“看不见的墙”。这里顺手把尺寸打出来。
+            string extra = box ? " box(" + box.size.ToString("F2") + ")" : "";
+            string s = c.name + extra + " min(" + c.bounds.min.x.ToString("F2") + "," + c.bounds.min.y.ToString("F2") + ","
+                + c.bounds.min.z.ToString("F2") + ") max(" + c.bounds.max.x.ToString("F2") + ","
+                + c.bounds.max.y.ToString("F2") + "," + c.bounds.max.z.ToString("F2") + ")";
+            if (!names.Contains(s) && names.Count < 6) names.Add(s);
+        }
+
+        foreach (var hit in Physics.CapsuleCastAll(bottom, top, r, dir, .4f, FloorMask, QueryTriggerInteraction.Ignore))
+            Take(hit.collider);
+        foreach (var c in Physics.OverlapCapsule(bottom, top, r * .98f, FloorMask, QueryTriggerInteraction.Ignore))
+            Take(c);
+
+        Debug.Log("[卡住] 位置 " + body.position.ToString("F2") + "，脚底 " + b.min.y.ToString("F2")
+            + "，推向 " + dir.ToString("F2") + "，在原地打转 0.5s 以上。挡路物体 "
+            + (names.Count == 0 ? "（没查到，可能是被别的东西顶住）" : string.Join(" | ", names)), this);
+
+        // 八个方向各打两条射线（腰 0.45 / 胸 1.05），把“四周是什么”一并打出来，方便离线判断。
+        // 角度是世界坐标：0° = +z，90° = +x。
+        string around = "";
+        for (int i = 0; i < 8; i++)
+        {
+            Vector3 d = Quaternion.Euler(0f, i * 45f, 0f) * Vector3.forward;
+            string tag = "";
+            for (int h = 0; h < 2; h++)
+            {
+                Vector3 o = new Vector3(b.center.x, b.min.y + (h == 0 ? .45f : 1.05f), b.center.z);
+                if (Physics.Raycast(o, d, out var rh, .9f, FloorMask, QueryTriggerInteraction.Ignore)
+                    && !rh.collider.transform.IsChildOf(transform))
+                    tag += rh.collider.name + "@" + rh.distance.ToString("F2") + " ";
+            }
+            around += "[" + (i * 45) + "°" + (tag.Length == 0 ? " 通" : " " + tag.Trim()) + "] ";
+        }
+        Debug.Log("[卡住] 四周：" + around, this);
     }
 
     /// <summary>前方 3~30cm 的矮台阶：返回一个向上的速度，让胶囊能“蹭”上去；没有就返回 0。</summary>
