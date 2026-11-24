@@ -15,14 +15,16 @@ public sealed class GameAudio : MonoBehaviour
 {
     public static GameAudio Instance { get; private set; }
 
-    /// <summary>背景音乐音量（0~1）。设置界面里的“背景音量”会乘在 AudioListener 上。</summary>
-    public const float BgmVolume = .55f;
+    /// <summary>背景音乐音量（0~1）。设置界面里的“背景音量”会乘在 AudioListener 上。
+    /// 玩家换的这首（22.9s 循环）RMS 比原来那首高约 3.6dB，这里同步降下来，整体听感不变。</summary>
+    public const float BgmVolume = .42f;
 
     /// <summary>走多远算一步（米）。走速 2 m/s 时约 2.2 步/秒，接近正常步频。</summary>
     public const float StepLength = .90f;
 
-    AudioSource bgm, sfx, steps, push;
-    AudioClip bgmClip, pickupClip, stepClip, pushClip;
+    AudioSource bgm, sfx, steps, push, page, world;
+    AudioClip bgmClip, itemClip, stepClip, pushClip, pageClip, doorClip, lampClip;
+    float lastPageAt = -1f;
     bool pushing;
     bool walkingState;
     float walkAccum;
@@ -41,28 +43,44 @@ public sealed class GameAudio : MonoBehaviour
         if (Instance && Instance != this) { Destroy(gameObject); return; }
         Instance = this;
 
-        bgmClip = Resources.Load<AudioClip>("GameAudio/bgm_old_house");
-        pickupClip = Resources.Load<AudioClip>("GameAudio/pickup_short");
+        bgmClip = Resources.Load<AudioClip>("GameAudio/bgm_memory");
+        // 拾取 / 放置道具：玩家提供的「拾取道具音1」，两种操作用同一段。
+        itemClip = Resources.Load<AudioClip>("GameAudio/pickup_item");
         stepClip = Resources.Load<AudioClip>("GameAudio/step_single");
         pushClip = Resources.Load<AudioClip>("GameAudio/push_loop");
+        // 剧情提示翻页（按空格继续 / 点上一步）：玩家提供的「消息提示音」。
+        pageClip = Resources.Load<AudioClip>("GameAudio/ui_page");
+        // 开门 / 拉抽屉：真实录音（木门吱呀打开），开灯仍是合成音。
+        doorClip = Resources.Load<AudioClip>("GameAudio/door_open");
+        lampClip = Resources.Load<AudioClip>("GameAudio/lamp_switch");
 
-        if (!bgmClip) Debug.LogWarning("[音频] 找不到背景音乐 Resources/GameAudio/bgm_old_house");
-        if (!pickupClip) Debug.LogWarning("[音频] 找不到拾取音效 Resources/GameAudio/pickup_short");
+        if (!bgmClip) Debug.LogWarning("[音频] 找不到背景音乐 Resources/GameAudio/bgm_memory");
+        if (!itemClip) Debug.LogWarning("[音频] 找不到拾取/放置音效 Resources/GameAudio/pickup_item");
         if (!stepClip) Debug.LogWarning("[音频] 找不到脚步音效 Resources/GameAudio/step_single");
         if (!pushClip) Debug.LogWarning("[音频] 找不到推动音效 Resources/GameAudio/push_loop");
+        if (!pageClip) Debug.LogWarning("[音频] 找不到提示翻页音效 Resources/GameAudio/ui_page");
+        if (!doorClip) Debug.LogWarning("[音频] 找不到开门音效 Resources/GameAudio/door_open");
+        if (!lampClip) Debug.LogWarning("[音频] 找不到开关灯音效 Resources/GameAudio/lamp_switch");
 
         bgm = Make("背景音乐", bgmClip, BgmVolume, true);
         // 拾取 / 放置：clips 由 PlayOneShot 传，音源自己不挂 clip。
         sfx = Make("拾取放置音效", null, 1f, false);
-        // 脚步：每一步 PlayOneShot，音高随机一点，别听出机械重复。
+        // 脚步声：每一步 PlayOneShot，音高随机一点，别听出机械重复。
         steps = Make("脚步声", null, .85f, false);
         push = Make("推动音效", pushClip, .62f, true);
+        // 提示翻页：单独一条音源，免得和拾取/放置抢 pitch。
+        page = Make("提示翻页音效", null, .9f, false);
+        // 开门 / 开灯：再单独一条，和拾取、翻页都不互相干扰。
+        world = Make("环境互动音效", null, 1f, false);
 
         SceneManager.sceneLoaded += OnSceneLoaded;
         EnsureListener();
 
         if (bgmClip) { bgm.Play(); Debug.Log($"[音频] 背景音乐开始播放，时长 {bgmClip.length:F1}s"); }
-        Debug.Log($"[音频] 音效载入：拾取 {(pickupClip ? pickupClip.length.ToString("F2") + "s" : "缺失")}，" +
+        Debug.Log($"[音频] 音效载入：拾取/放置 {(itemClip ? itemClip.length.ToString("F2") + "s" : "缺失")}，" +
+                  $"提示翻页 {(pageClip ? pageClip.length.ToString("F2") + "s" : "缺失")}，" +
+                  $"开门 {(doorClip ? doorClip.length.ToString("F2") + "s" : "缺失")}，" +
+                  $"开关灯 {(lampClip ? lampClip.length.ToString("F2") + "s" : "缺失")}，" +
                   $"脚步 {(stepClip ? stepClip.length.ToString("F2") + "s" : "缺失")}，" +
                   $"推 {(pushClip ? pushClip.length.ToString("F2") + "s" : "缺失")}");
     }
@@ -111,23 +129,60 @@ public sealed class GameAudio : MonoBehaviour
 
     // ---------------- 对外 ----------------
 
-    /// <summary>拾取道具。</summary>
-    public static void PlayPickup() => PlaySfx(1f);
+    /// <summary>拾取道具：玩家提供的「拾取道具音1」。</summary>
+    public static void PlayPickup() => PlayItem(1f, "拾取");
 
-    /// <summary>放置道具（和拾取同一段音效，音高抬一点，听感上是“放下去”）。</summary>
-    public static void PlayPlace() => PlaySfx(1.06f);
+    /// <summary>放置道具：和拾取同一段音效，音高抬 6%，听感上像“放下去”。</summary>
+    public static void PlayPlace() => PlayItem(1.06f, "放置");
 
-    static void PlaySfx(float pitch)
+    static void PlayItem(float pitch, string what)
     {
         var a = Instance;
         if (!a)
         {
-            Debug.LogWarning("[音频] GameAudio 还没初始化，拾取/放置音效被跳过");
+            Debug.LogWarning("[音频] GameAudio 还没初始化，" + what + "音效被跳过");
             return;
         }
-        if (!a.sfx || !a.pickupClip) return;
+        if (!a.sfx || !a.itemClip) return;
         a.sfx.pitch = pitch;
-        a.sfx.PlayOneShot(a.pickupClip, 1f);
+        a.sfx.PlayOneShot(a.itemClip, 1f);
+    }
+
+    /// <summary>
+    /// 剧情提示翻页：玩家按空格继续、或点左下角“上一步”时响一下。
+    /// 用玩家提供的「消息提示音」。0.12 秒内重复调用只响一声 ——
+    /// “翻页那一下”和“新一页出现在屏幕上”几乎同一帧发生，不去重会连响两声。
+    /// </summary>
+    public static void PlayPage()
+    {
+        var a = Instance;
+        if (!a || !a.page || !a.pageClip) return;
+        if (Time.unscaledTime - a.lastPageAt < .12f) return;
+        a.lastPageAt = Time.unscaledTime;
+        a.page.Stop();                 // 连按空格 / 连点“上一步”时只留最新一声，别叠成一片
+        a.page.pitch = 1f;
+        a.page.PlayOneShot(a.pageClip, .9f);
+    }
+
+    /// <summary>
+    /// 打开 / 关闭门、柜门、抽屉。
+    /// pitch 1 = 正常的房门；柜门、抽屉更小更轻，调用处会抬一点音高。
+    /// </summary>
+    public static void PlayDoor(float pitch = 1f, float volume = .85f)
+    {
+        var a = Instance;
+        if (!a || !a.world || !a.doorClip) return;
+        a.world.pitch = Mathf.Clamp(pitch, .5f, 2f);
+        a.world.PlayOneShot(a.doorClip, Mathf.Clamp01(volume));
+    }
+
+    /// <summary>拨墙上的灯开关：一声短促的“咔哒”。</summary>
+    public static void PlayLamp(float pitch = 1f, float volume = .9f)
+    {
+        var a = Instance;
+        if (!a || !a.world || !a.lampClip) return;
+        a.world.pitch = Mathf.Clamp(pitch, .5f, 2f);
+        a.world.PlayOneShot(a.lampClip, Mathf.Clamp01(volume));
     }
 
     /// <summary>

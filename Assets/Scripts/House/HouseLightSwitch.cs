@@ -11,6 +11,8 @@ public sealed class HouseLightSwitch : MonoBehaviour
     {
         bool next = !IsOn;
         if (lamps != null) foreach (var lamp in lamps) if (lamp) lamp.SetOn(next);
+        // 开灯 / 关灯：同一段“咔哒”，开灯音高略高一点，听感上更“亮”。
+        GameAudio.PlayLamp(next ? 1.04f : .96f);
         if (next && StoryProgress.Instance) StoryProgress.Instance.OnLampTurnedOn();
     }
 }

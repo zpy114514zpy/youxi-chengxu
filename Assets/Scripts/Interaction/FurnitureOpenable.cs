@@ -190,7 +190,12 @@ public sealed class FurnitureOpenable : MonoBehaviour
             else PrepareHinge(playerPosition);
         }
         opened = !opened;
+        // 柜门 / 抽屉比房门小得多：同一段开门声抬音高、压音量，听感上是“轻的家具在动”。
+        GameAudio.PlayDoor(opened ? PartPitch : PartPitch * .92f, opened ? .60f : .52f);
     }
+
+    // 柜门/抽屉的开门声参数：抽屉更小更脆，柜门稍沉一点。
+    float PartPitch => slide ? 1.32f : 1.18f;
 
     public void Toggle() { Toggle(PlayerPosition); }
 
@@ -199,6 +204,7 @@ public sealed class FurnitureOpenable : MonoBehaviour
     {
         if (!opened)
         {
+            GameAudio.PlayDoor(PartPitch, .55f);       // 剧情自动拉开，也给一声，免得画面动了却没声音
             if (slide) openingDirection = PickOutwardByClearance();
             else
             {
@@ -223,6 +229,7 @@ public sealed class FurnitureOpenable : MonoBehaviour
     /// </summary>
     public void OpenAlong(Vector3 direction)
     {
+        if (!opened) GameAudio.PlayDoor(PartPitch, .55f);
         Vector3 dir = Vector3.ProjectOnPlane(direction, Vector3.up);
         if (dir.sqrMagnitude > .0004f) openingDirection = dir.normalized;
         else if (slide) openingDirection = PickOutwardByClearance();

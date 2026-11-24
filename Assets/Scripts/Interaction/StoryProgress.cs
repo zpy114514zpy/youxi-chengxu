@@ -30,6 +30,9 @@ public sealed class StoryProgress : MonoBehaviour
     Texture2D opening, detail, guide, pillOn, pillHover, pillOff;
     Font font;
     bool lampIntroShown, cursorReleased;
+    // 屏幕上当前这一页的标识（标题+正文+底图）：用来判断“有没有新的一页弹出来”，
+    // 有新页出现就响一声提示音（和按空格翻页用同一段「消息提示音」）。
+    string lastPageKey;
     // 第二关有自己的叙事 UI（Level2Ui）。这个组件仍然留着一个 Instance 给别人判空，
     // 但开场页、空格翻页、OnGUI 全部关掉，不然两套 UI 会一起弹。
     bool storyActive = true;
@@ -245,14 +248,33 @@ public sealed class StoryProgress : MonoBehaviour
     {
         if(!storyActive)return;
         UpdateCursor();                       // 提示页在屏幕上时放开鼠标，方便点“上一步”
+        WatchPageAppear();                    // 新的一页弹到屏幕上时也响一声
         if(pendingBack){pendingBack=false;GoBack();}
         if(UiInputBlocker.Active)return;      // 密码键盘打开时不推进剧情
         if(Input.GetKeyDown(KeyCode.Space))Advance();
     }
 
+    /// <summary>
+    /// 面板刚出现在屏幕上（例如按 E 读绘本、任务完成弹提示、排队的下一页自动接上）时响一声。
+    /// 按空格翻页那一下已经响过，<see cref="GameAudio.PlayPage"/> 内部有 0.12 秒去重，不会连响两声。
+    /// </summary>
+    void WatchPageAppear()
+    {
+        var shown=DisplayedPage;
+        string key=shown.HasValue
+            ? (shown.Value.title??"")+"|"+(shown.Value.body??"")+"|"+(shown.Value.texture?shown.Value.texture.name:"")
+            : null;
+        if(key==lastPageKey)return;
+        lastPageKey=key;
+        if(key!=null)GameAudio.PlayPage();
+    }
+
     /// <summary>往前推进一页：回看中按空格先沿原路走回原处，走回原处后恢复正常推进。</summary>
     void Advance()
     {
+        // 一页都没有的时候按空格什么都不做，也不该出声。
+        if(!reviewing.HasValue && !reading.HasValue && !current.HasValue)return;
+        GameAudio.PlayPage();                 // 提示翻页音（按空格继续）
         if(reviewing.HasValue)
         {
             Page leaving=reviewing.Value;
@@ -276,6 +298,7 @@ public sealed class StoryProgress : MonoBehaviour
     void GoBack()
     {
         if(backSteps.Count==0)return;
+        GameAudio.PlayPage();                 // 提示翻页音（点“上一步”）
         if(DisplayedPage.HasValue)forwardSteps.Push(DisplayedPage.Value);
         reviewing=backSteps[backSteps.Count-1];
         backSteps.RemoveAt(backSteps.Count-1);
