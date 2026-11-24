@@ -3,33 +3,31 @@ using UnityEngine;
 [DefaultExecutionOrder(-20)]
 public sealed class PlayerInventory : MonoBehaviour
 {
-    public bool IsOpen {get;private set;}
+    /// <summary>背包界面已经移除（按 B 不会再打开任何东西）。这个属性保留，只为兼容旧的判空调用。</summary>
+    public bool IsOpen => false;
     public float reach=1.7f;
     [Range(1,20)] public int capacity=20;
     readonly List<PickupItem> items=new List<PickupItem>();
     int selected;
-    int tab;
-    Vector2 scroll;
     public int Count => items.Count;
     public PickupItem Selected => items.Count==0 ? null : items[Mathf.Clamp(selected,0,items.Count-1)];
     Component target;
     string prompt="",notice="";
     float noticeUntil;
     Font font;
-    Texture2D frame;
     StoryPlacement[] placements;
     float placementRefresh;
-    void Awake(){font=Font.CreateDynamicFontFromOSFont(new[]{"Microsoft YaHei","Arial"},32);frame=Resources.Load<Texture2D>("StoryUI/inventory-frame");}
+    void Awake(){font=Font.CreateDynamicFontFromOSFont(new[]{"Microsoft YaHei","Arial"},32);}
     void Update()
     {
         target=null;prompt="";
         if(UiInputBlocker.Active)return;
         if(StoryProgress.Instance && StoryProgress.Instance.IsReading)return;
-        if(Input.GetKeyDown(KeyCode.B))SetOpen(!IsOpen);
-        if(IsOpen&&Input.GetKeyDown(KeyCode.Escape))SetOpen(false);
+        // 背包系统已按需求移除：B 键不再打开任何界面。
+        // 内部的道具列表仍然保留（玩偶/积木/钥匙的摆放、开门都依赖它），只是没有 UI 了。
         // 背包开着、或者鼠标还放在界面上的时候不响应丢弃：否则会在看不见准星的情况下把道具扔在脚边。
-        if(!IsOpen&&Cursor.lockState==CursorLockMode.Locked&&Input.GetKeyDown(KeyCode.G))Drop();
-        if(IsOpen||Cursor.lockState!=CursorLockMode.Locked)return;
+        if(Cursor.lockState==CursorLockMode.Locked&&Input.GetKeyDown(KeyCode.G))Drop();
+        if(Cursor.lockState!=CursorLockMode.Locked)return;
         var cam=Camera.main;if(!cam)return;
         float nearest=reach;
         // 抽屉里的东西总是先撞到柜板，所以“能捡的道具”单独记一份，最后让它优先于抽屉/柜门。
@@ -305,7 +303,6 @@ public sealed class PlayerInventory : MonoBehaviour
         return null;
     }
     void ShowNotice(string value){notice=value;noticeUntil=Time.unscaledTime+2.5f;}
-    void SetOpen(bool value){IsOpen=value;Cursor.lockState=value?CursorLockMode.None:CursorLockMode.Locked;Cursor.visible=value;}
     public void Drop()
     {
         if(items.Count==0)return;
@@ -370,8 +367,7 @@ public sealed class PlayerInventory : MonoBehaviour
     void OnGUI()
     {
         var style=new GUIStyle(GUI.skin.box){font=font,fontSize=17,alignment=TextAnchor.MiddleCenter,wordWrap=true};
-        if(IsOpen)DrawInventory();
-        else if(prompt!="")
+        if(prompt!="")
         {
             float width=Mathf.Min(520,Screen.width*.8f);
             GUI.Box(new Rect((Screen.width-width)*.5f,Screen.height*.86f,width,50),prompt,style);
@@ -381,104 +377,6 @@ public sealed class PlayerInventory : MonoBehaviour
             float width=Mathf.Min(520,Screen.width*.8f);
             GUI.Box(new Rect((Screen.width-width)*.5f,Screen.height*.5f,width,50),notice,style);
         }
-    }
-    GUIStyle TextStyle(int size,TextAnchor alignment,Color color)
-    {
-        var result=new GUIStyle(GUI.skin.label){font=font,fontSize=size,alignment=alignment,wordWrap=true};
-        result.normal.textColor=color;return result;
-    }
-    void Tint(Rect rect,Color color)
-    {
-        var old=GUI.color;GUI.color=color;GUI.DrawTexture(rect,Texture2D.whiteTexture);GUI.color=old;
-    }
-    void DrawInventory()
-    {
-        const float w=1536f,h=1024f;
-        float scale=Mathf.Min(Screen.width*.94f/w,Screen.height*.94f/h);
-        var original=GUI.matrix;
-        GUI.matrix=Matrix4x4.TRS(new Vector3((Screen.width-w*scale)*.5f,(Screen.height-h*scale)*.5f,0),Quaternion.identity,new Vector3(scale,scale,1));
-        if(frame)GUI.DrawTexture(new Rect(0,0,w,h),frame,ScaleMode.StretchToFill,true);
-        else {Tint(new Rect(0,0,w,h),new Color(.025f,.07f,.11f,.97f));}
-        var cyan=new Color(.35f,.95f,1f);
-        GUI.Label(new Rect(480,55,580,76),"背  包",TextStyle(52,TextAnchor.MiddleCenter,cyan));
-        var tabs=new[]{"道具","信封碎片","线索记录"};
-        for(int i=0;i<tabs.Length;i++)
-        {
-            var rect=new Rect(130+i*267,196,240,58);
-            Tint(rect,tab==i?new Color(.03f,.48f,.60f,.78f):new Color(.02f,.13f,.19f,.83f));
-            if(GUI.Button(rect,tabs[i],TextStyle(31,TextAnchor.MiddleCenter,Color.white))){tab=i;scroll=Vector2.zero;}
-        }
-        if(tab==0)DrawSlots();else if(tab==1)DrawFragments();else DrawClues();
-        DrawDetail();
-        GUI.Label(new Rect(128,890,820,52),"容量  "+items.Count+" / "+capacity+"     B 关闭    G 丢弃所选道具",TextStyle(28,TextAnchor.MiddleLeft,cyan));
-        if(GUI.Button(new Rect(1407,70,64,55),"×",TextStyle(48,TextAnchor.MiddleCenter,cyan)))SetOpen(false);
-        GUI.matrix=original;
-    }
-    void DrawSlots()
-    {
-        var cyan=new Color(.27f,.82f,.91f);
-        for(int i=0;i<capacity;i++)
-        {
-            int col=i%4,row=i/4;
-            var rect=new Rect(144+col*194,282+row*118,165,104);
-            Tint(rect,new Color(.01f,.03f,.09f,i==selected&&i<items.Count?.93f:.72f));
-            var edge=i==selected&&i<items.Count?new Color(.48f,1f,1f):cyan;
-            Tint(new Rect(rect.x,rect.y,rect.width,3),edge);Tint(new Rect(rect.x,rect.yMax-3,rect.width,3),edge);
-            Tint(new Rect(rect.x,rect.y,3,rect.height),edge);Tint(new Rect(rect.xMax-3,rect.y,3,rect.height),edge);
-            if(i>=items.Count)continue;
-            var item=items[i];if(!item)continue;
-            if(item.icon)GUI.DrawTexture(new Rect(rect.x+53,rect.y+10,60,54),item.icon.texture,ScaleMode.ScaleToFit,true);
-            else GUI.Label(new Rect(rect.x+8,rect.y+7,rect.width-16,53),item.displayName.Length>0?item.displayName.Substring(0,1):"?",TextStyle(42,TextAnchor.MiddleCenter,cyan));
-            GUI.Label(new Rect(rect.x+7,rect.y+67,rect.width-14,31),item.displayName,TextStyle(21,TextAnchor.MiddleCenter,Color.white));
-            if(GUI.Button(rect,GUIContent.none,GUIStyle.none))selected=i;
-        }
-    }
-    void DrawFragments()
-    {
-        var story=StoryProgress.Instance;
-        GUI.Label(new Rect(145,290,770,75),"信件拼接预览",TextStyle(39,TextAnchor.MiddleCenter,Color.white));
-        var names=new[]{"信封碎片①","信封碎片②","信封碎片③"};
-        for(int i=0;i<names.Length;i++)
-        {
-            bool found=story&&story.fragments.Contains(names[i]);
-            var r=new Rect(153+i*250,410,222,260);
-            Tint(r,new Color(.02f,.12f,.18f,.88f));
-            GUI.Label(new Rect(r.x+12,r.y+22,r.width-24,45),names[i],TextStyle(28,TextAnchor.MiddleCenter,new Color(.3f,.9f,1f)));
-            GUI.Label(new Rect(r.x+15,r.y+90,r.width-30,145),found?(i==0?"以后我一定会好好爱护我的玩偶的！":"已找到，等待拼接"):"尚未找到",TextStyle(26,TextAnchor.MiddleCenter,found?Color.white:new Color(.52f,.64f,.7f)));
-        }
-    }
-    void DrawClues()
-    {
-        var clues=StoryProgress.Instance?StoryProgress.Instance.clues:null;
-        int count=clues==null?0:clues.Count;
-        GUI.Label(new Rect(146,290,770,68),count==0?"尚未阅读线索":"已记录的线索 · "+count,TextStyle(36,TextAnchor.MiddleCenter,Color.white));
-        scroll=GUI.BeginScrollView(new Rect(146,380,770,460),scroll,new Rect(0,0,740,Mathf.Max(460,count*105)));
-        for(int i=0;i<count;i++)
-        {
-            var rect=new Rect(0,i*105,722,94);Tint(rect,new Color(.02f,.12f,.18f,.88f));
-            GUI.Label(new Rect(20,i*105+6,682,82),clues[i],TextStyle(25,TextAnchor.MiddleLeft,Color.white));
-        }
-        GUI.EndScrollView();
-    }
-    void DrawDetail()
-    {
-        var cyan=new Color(.34f,.93f,1f);
-        PickupItem item=tab==0?Selected:null;
-        GUI.Label(new Rect(1030,195,390,56),"道具详情",TextStyle(38,TextAnchor.MiddleCenter,cyan));
-        Tint(new Rect(1112,277,225,225),new Color(.01f,.05f,.12f,.85f));
-        if(item)
-        {
-            if(item.icon)GUI.DrawTexture(new Rect(1142,307,165,165),item.icon.texture,ScaleMode.ScaleToFit,true);
-            else GUI.Label(new Rect(1120,310,210,160),item.displayName.Length>0?item.displayName.Substring(0,1):"?",TextStyle(104,TextAnchor.MiddleCenter,cyan));
-        }
-        else GUI.Label(new Rect(1120,310,210,160),"?",TextStyle(94,TextAnchor.MiddleCenter,new Color(.25f,.4f,.48f)));
-        GUI.Label(new Rect(1035,530,365,46),"名称",TextStyle(25,TextAnchor.MiddleLeft,cyan));
-        GUI.Label(new Rect(1035,572,375,58),item?item.displayName:"未选择道具",TextStyle(34,TextAnchor.MiddleLeft,Color.white));
-        GUI.Label(new Rect(1035,642,365,40),"种类",TextStyle(25,TextAnchor.MiddleLeft,cyan));
-        GUI.Label(new Rect(1035,680,365,42),item?item.itemType:"—",TextStyle(28,TextAnchor.MiddleLeft,Color.white));
-        GUI.Label(new Rect(1035,732,365,40),"简介",TextStyle(25,TextAnchor.MiddleLeft,cyan));
-        GUI.Label(new Rect(1035,776,365,108),item?item.description:"选择左侧道具查看详细介绍。",TextStyle(23,TextAnchor.UpperLeft,Color.white));
-        GUI.Label(new Rect(1035,893,365,38),"持有数量  "+(item?item.quantity:0),TextStyle(25,TextAnchor.MiddleLeft,cyan));
     }
     void OnDestroy(){if(font)Destroy(font);}
 }

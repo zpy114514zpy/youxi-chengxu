@@ -192,6 +192,17 @@ public sealed class GameAudio : MonoBehaviour
         a.world.PlayOneShot(a.portalClip, .9f);
     }
 
+    /// <summary>
+    /// 序幕视频播放期间把背景音乐压掉（否则视频里的配乐会和关卡 BGM 叠在一起）。
+    /// 只动背景音乐这一条音源，拾取 / 脚步 / 视频自己的声音都不受影响。
+    /// </summary>
+    public static void SetBgmMuted(bool muted)
+    {
+        var a = Instance;
+        if (!a || !a.bgm) return;
+        a.bgm.mute = muted;
+    }
+
     /// <summary>拨墙上的灯开关：一声短促的“咔哒”。</summary>
     public static void PlayLamp(float pitch = 1f, float volume = .9f)
     {

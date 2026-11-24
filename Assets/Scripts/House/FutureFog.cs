@@ -12,6 +12,11 @@ public sealed class FutureFog : MonoBehaviour
 
     void Start()
     {
+        // 这一套「窗外白雾 + 纯色天光」是第一关的美术语言。
+        // 第二关现在有自己的黄昏天空盒：这里如果照旧执行，会把主相机改成 SolidColor、
+        // 还会把雾打开，天空盒一点都看不见 —— 所以第二关直接跳过整个 Start。
+        if(SceneManager.GetActiveScene().name!="Level 1")return;
+
         RenderSettings.fog=true;
         RenderSettings.fogMode=FogMode.Linear;
         RenderSettings.fogColor=new Color(.93f,.95f,.96f);

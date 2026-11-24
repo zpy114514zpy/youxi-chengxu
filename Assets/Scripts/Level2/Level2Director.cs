@@ -337,11 +337,8 @@ public sealed class Level2Director : MonoBehaviour
 
     void ApplyMood()
     {
-        // 环境光压暗、往冷灰偏：这一关不再有第一关那种米黄柔光。
-        RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Trilight;
-        RenderSettings.ambientSkyColor = new Color(.19f, .21f, .25f);
-        RenderSettings.ambientEquatorColor = new Color(.13f, .14f, .17f);
-        RenderSettings.ambientGroundColor = new Color(.07f, .07f, .09f);
+        // 环境光不再在这里设了 —— 连天空盒一起交给 Level2Sky（本轮新增），
+        // 否则天空是黄昏、环境光还是白天，窗内窗外会打架。
 
         var lights = new List<Light>();
         foreach (var l in FindObjectsOfType<Light>(true))
@@ -355,23 +352,26 @@ public sealed class Level2Director : MonoBehaviour
             switch (l.type)
             {
                 case LightType.Directional:
-                    // 窗外不再有明亮阳光，只剩一层灰白天光。
-                    l.color = new Color(.72f, .78f, .86f);
-                    l.intensity = Mathf.Min(before * .16f, .22f);
+                    // 太阳已经落下去很久了：只剩一层很淡的冷蓝夜色从窗口渗进来。
+                    // 不能直接关掉 —— 一点方向光都不给，地板和家具会全糊成一片，
+                    // 玩家连房间有多大、哪边是墙都看不出来。
+                    l.color = new Color(.50f, .58f, .76f);
+                    l.intensity = Mathf.Min(before * .08f, .10f);
                     l.shadows = LightShadows.Soft;
                     break;
 
                 case LightType.Spot:
-                    // 吸顶射灯：降功率、偏冷。阴影留着，旧屋的味道靠阴影撑。
+                    // 吸顶射灯：压暗但留住，作为“这里有一盏灯”的坐标。
                     l.color = Color.Lerp(l.color, new Color(.82f, .87f, 1f), .55f);
-                    l.intensity = before * .34f;
+                    l.intensity = before * .30f;
                     l.shadows = LightShadows.Soft;
                     break;
 
                 default:
-                    // 台灯/壁灯：留一点昏黄，作为整间冷灰里唯一的暖。
-                    l.color = Color.Lerp(l.color, new Color(1f, .84f, .58f), .45f);
-                    l.intensity = before * .55f;
+                    // 台灯/壁灯：环境光压到四成之后，这些灯就是玩家唯一的方向感，
+                    // 所以保留得比之前更多（.55 → .68），暖色也更明显一点。
+                    l.color = Color.Lerp(l.color, new Color(1f, .84f, .58f), .55f);
+                    l.intensity = before * .68f;
                     break;
             }
             l.range *= 1.05f;
@@ -383,13 +383,9 @@ public sealed class Level2Director : MonoBehaviour
         }
         Debug.Log($"[第二关] 氛围已调暗：共处理 {lights.Count} 盏灯");
 
-        // 主相机背景压成冷灰，不至于一开门看到白得刺眼的天空。
-        var cam = Camera.main;
-        if (cam)
-        {
-            cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.backgroundColor = new Color(.80f, .83f, .86f);
-        }
+        // 天空盒 + 环境光交给 Level2Sky（本轮新增）。
+        // 相机清屏统一放在后面的 ApplyFog 里改，避免两处各设一次。
+        Level2Sky.Apply();
     }
 
     /// <summary>
@@ -448,14 +444,18 @@ public sealed class Level2Director : MonoBehaviour
     {
         // 第二关整关关掉雾。原来那套“屋里清楚、窗外白雾”在二楼房间看不出来，
         // 但一楼走廊有十几米深，整片都落在雾带里 —— 玩家看到的就是面前一堵白墙，
-        // 而且人往前走它就往后退。这里只保留相机背景的冷灰天光，室内不再有任何雾。
+        // 而且人往前走它就往后退。天色的暗只靠环境光 + 天空盒来给，室内不用雾。
+        // 注意：FutureFog 以前也会在 Start 里把雾打开、把相机改成纯色，那处已经加了
+        // “只在 Level 1 执行”的判断，否则这里刚设好的天空盒会被它盖掉。
         RenderSettings.fog = false;
 
         var cam = Camera.main;
         if (cam)
         {
-            cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.backgroundColor = new Color(.80f, .83f, .86f);
+            // 清屏必须改成 Skybox：这一关的天已经换成黄昏天空盒了（Level2Sky），
+            // 再拿一层纯色铺底会把天空盒整个盖住，从窗户望出去只剩一块灰。
+            cam.clearFlags = CameraClearFlags.Skybox;
+            cam.backgroundColor = new Color(.07f, .08f, .10f);
         }
     }
 

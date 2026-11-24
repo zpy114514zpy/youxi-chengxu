@@ -8,7 +8,7 @@ public sealed class FragmentDeposit : MonoBehaviour
     public string nextScene = "Level 2";
     public string requiredFragment = "信封碎片⑤";
     public bool filled;
-    public LevelPortal portal;
+    public BlackHolePortal portal;
 
     Light[] glows;
     float[] baseIntensity;
@@ -53,28 +53,28 @@ public sealed class FragmentDeposit : MonoBehaviour
         foreach (var c in GetComponentsInChildren<Collider>()) c.enabled = false;
         foreach (var l in GetComponentsInChildren<Light>()) l.enabled = false;
 
-        story?.EnqueueCenter("任务完成", "恭喜完成关卡1所有任务！\n走进那道光门，去往下一章。");
+        story?.EnqueueCenter("任务完成", "恭喜完成关卡1所有任务！\n身后的墙上亮起了一道门……\n门的另一边，好像有什么东西在吸引着我。");
         StartCoroutine(OpenPortal());
     }
 
     /// <summary>
-    /// 碎片归位的瞬间不直接切场景 —— 先在旁边立一道光门，让玩家自己走进去。
-    /// 位置交给 LevelPortal 自己找：挑最空的方向、落到地面上、正面朝回放置点。
+    /// 碎片归位的瞬间不直接切场景 —— 先在**玩家身后的墙上**烧穿一个黑洞，让玩家自己走进去。
+    /// 位置由 BlackHolePortal 向后扫射线找墙；找不到墙时它会退回到放置点旁边，流程不会断。
     /// </summary>
     IEnumerator OpenPortal()
     {
         yield return new WaitForSecondsRealtime(1.1f);
-        portal = LevelPortal.OpenNear(transform.position, nextScene);
+        var player = FindObjectOfType<PlayerController>();
+        portal = BlackHolePortal.OpenBehind(player ? player.transform : null, transform.position, nextScene);
 
         if (!portal)
         {
-            // 周围实在没地方立门（或被家具围死）：退回到直接加载，别把玩家卡在这一关
-            Debug.LogWarning("[碎片放置] 光门没找到合适的落点，直接进入下一关。", this);
+            Debug.LogWarning("[碎片放置] 黑洞没能生成，直接进入下一关。", this);
             StartCoroutine(GoNextLevel());
             yield break;
         }
 
-        Debug.Log($"[碎片放置] 光门已开启：{portal.transform.position:F2}，朝向 {portal.transform.forward:F2}", this);
+        Debug.Log($"[碎片放置] 黑洞已开启：{portal.transform.position:F2}，朝向 {portal.transform.forward:F2}", this);
     }
 
     IEnumerator GoNextLevel()
