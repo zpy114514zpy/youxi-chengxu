@@ -16,7 +16,7 @@ public sealed class GameAudio : MonoBehaviour
     public static GameAudio Instance { get; private set; }
 
     /// <summary>背景音乐音量（0~1）。设置界面里的“背景音量”会乘在 AudioListener 上。
-    /// 玩家换的这首（22.9s 循环）RMS 比原来那首高约 3.6dB，这里同步降下来，整体听感不变。</summary>
+    /// 这首和之前那首都是 -20 LUFS，音量沿用同一个值，换曲不用再动。</summary>
     public const float BgmVolume = .42f;
 
     /// <summary>走多远算一步（米）。走速 2 m/s 时约 2.2 步/秒，接近正常步频。</summary>
@@ -43,7 +43,8 @@ public sealed class GameAudio : MonoBehaviour
         if (Instance && Instance != this) { Destroy(gameObject); return; }
         Instance = this;
 
-        bgmClip = Resources.Load<AudioClip>("GameAudio/bgm_memory");
+        // 背景音乐：玩家提供的整段曲子，已做成 213.6s 无缝循环，两关共用同一条。
+        bgmClip = Resources.Load<AudioClip>("GameAudio/bgm_main");
         // 拾取 / 放置道具：玩家提供的「拾取道具音1」，两种操作用同一段。
         itemClip = Resources.Load<AudioClip>("GameAudio/pickup_item");
         stepClip = Resources.Load<AudioClip>("GameAudio/step_single");
@@ -54,7 +55,7 @@ public sealed class GameAudio : MonoBehaviour
         doorClip = Resources.Load<AudioClip>("GameAudio/door_open");
         lampClip = Resources.Load<AudioClip>("GameAudio/lamp_switch");
 
-        if (!bgmClip) Debug.LogWarning("[音频] 找不到背景音乐 Resources/GameAudio/bgm_memory");
+        if (!bgmClip) Debug.LogWarning("[音频] 找不到背景音乐 Resources/GameAudio/bgm_main");
         if (!itemClip) Debug.LogWarning("[音频] 找不到拾取/放置音效 Resources/GameAudio/pickup_item");
         if (!stepClip) Debug.LogWarning("[音频] 找不到脚步音效 Resources/GameAudio/step_single");
         if (!pushClip) Debug.LogWarning("[音频] 找不到推动音效 Resources/GameAudio/push_loop");
