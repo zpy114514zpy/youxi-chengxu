@@ -24,7 +24,7 @@ public sealed class Level2Toys : MonoBehaviour
     Transform guitar;
     Level2GuitarSpot guitarSpot;
 
-    bool unlocked, foundAll, placedAll, guitarTaken, guitarPlaced, leftRoomNotified;
+    bool unlocked, foundAll, placedAll, guitarTaken, guitarPlaced, leftRoomNotified, lockedNotified;
     public bool Unlocked => unlocked;
 
     public void Setup()
@@ -223,7 +223,8 @@ public sealed class Level2Toys : MonoBehaviour
 
     public bool WashOne(PlayerInventory inv)
     {
-        if (!inv) return false;
+        // 相框没补完之前，谜题二整体不开放：洗手台按不出东西来。
+        if (!inv || !unlocked) return false;
         foreach (var id in ToyIds)
         {
             if (washed.Contains(id)) continue;
@@ -248,7 +249,7 @@ public sealed class Level2Toys : MonoBehaviour
     {
         reason = "";
         if (spot.filled) { reason = "这里已经摆好了"; return false; }
-        if (!unlocked) { reason = "先把全家福修好"; return false; }
+        if (!unlocked) { reason = "墙上的全家福还没补完。\n先把它补好，这些玩偶才摆得回去。"; return false; }
         if (washed.Count < ToyIds.Length) { reason = "得先把四个玩偶都洗干净"; return false; }
         if (!inv || !inv.HasItem(spot.requiredId)) { reason = "手里没有这只玩偶"; return false; }
         return true;
@@ -840,6 +841,17 @@ public sealed class Level2Toys : MonoBehaviour
             }
         }
 
+        if (!unlocked && !lockedNotified)
+        {
+            // 相框还没补完就先把玩偶捡走了 —— 玩家会不知道下一步做什么，第一次就说明白。
+            var inv = FindObjectOfType<PlayerInventory>();
+            if (inv && BagCount(inv) > 0)
+            {
+                lockedNotified = true;
+                Ui?.Note("还差一步", "这些玩偶先放一放 —— 墙上那幅全家福还没补完。\n把相片残片补齐、把画修好，再回来收拾它们。");
+            }
+        }
+
         if (!foundAll && unlocked)
         {
             var inv = FindObjectOfType<PlayerInventory>();
@@ -893,7 +905,9 @@ public sealed class Level2WashBasin : L2Interactable
     {
         get
         {
-            if (!host || !host.Unlocked) return "";
+            if (!host) return "";
+            // 相框没补完：给一句明确的“先去补画”，而不是什么都不显示（玩家会以为这里坏了）。
+            if (!host.Unlocked) return "E 洗手台（先修补墙上的全家福）";
             if (host.WashedCount >= 4) return "四个玩偶都洗干净了";
             return "E 清洗玩偶";
         }
@@ -902,10 +916,15 @@ public sealed class Level2WashBasin : L2Interactable
     public override void Interact(PlayerInventory inv)
     {
         if (!host) return;
+        var ui = Level2Director.Instance ? Level2Director.Instance.Ui : null;
+        if (!host.Unlocked)
+        {
+            ui?.Note("还差一步", "墙上的全家福还没补完。\n先回到那个房间，把找到的相片残片补上去。");
+            return;
+        }
         if (host.WashedCount >= 4) return;
         if (!host.WashOne(inv))
         {
-            var ui = Level2Director.Instance ? Level2Director.Instance.Ui : null;
             ui?.Note("洗手台", "手里的玩偶都已经洗过了，还有几只没找到。");
         }
     }
@@ -926,7 +945,7 @@ public sealed class Level2ToySpot : L2Interactable
         {
             if (!host) return "";
             if (filled) return "已经摆好了";
-            if (!host.Unlocked) return "";
+            if (!host.Unlocked) return "E 摆放 " + displayName + "（先修补全家福）";
             if (host.WashedCount < 4) return "E 摆放 " + displayName + "（先洗干净）";
             var inv = FindObjectOfType<PlayerInventory>();
             if (inv && inv.HasItem(requiredId)) return "E 摆放 " + displayName;

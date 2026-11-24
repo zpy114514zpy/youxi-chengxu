@@ -144,7 +144,9 @@ public class FirstPersonView : MonoBehaviour
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
         }
-        if (Input.GetMouseButtonDown(0) && !(StoryProgress.Instance && StoryProgress.Instance.IsShowingPage))
+        if (Input.GetMouseButtonDown(0)
+            && !(StoryProgress.Instance && StoryProgress.Instance.IsShowingPage)
+            && !(Level2Ui.Instance && Level2Ui.Instance.IsPageOnScreen))
         {
             // 剧情/提示面板在屏幕上时鼠标要留给面板上的“上一步”按钮，单击不要抢回来。
             Cursor.lockState = CursorLockMode.Locked;

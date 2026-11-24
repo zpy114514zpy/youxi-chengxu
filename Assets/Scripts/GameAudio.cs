@@ -145,7 +145,8 @@ public sealed class GameAudio : MonoBehaviour
         }
         if (!a.sfx || !a.itemClip) return;
         a.sfx.pitch = pitch;
-        a.sfx.PlayOneShot(a.itemClip, 1f);
+        // 玩家要求“小一点”：拾取/放置压到 0.62，垫在其他音效下面，别抢剧情提示音。
+        a.sfx.PlayOneShot(a.itemClip, .62f);
     }
 
     /// <summary>
@@ -161,7 +162,8 @@ public sealed class GameAudio : MonoBehaviour
         a.lastPageAt = Time.unscaledTime;
         a.page.Stop();                 // 连按空格 / 连点“上一步”时只留最新一声，别叠成一片
         a.page.pitch = 1f;
-        a.page.PlayOneShot(a.pageClip, .9f);
+        // 玩家要求“小一点”：提示音压到 0.55，连点翻页也不刺耳。
+        a.page.PlayOneShot(a.pageClip, .55f);
     }
 
     /// <summary>

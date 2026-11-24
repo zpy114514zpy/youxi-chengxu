@@ -49,6 +49,7 @@ public sealed class Level2Director : MonoBehaviour
         Instance = this;
         Ui = gameObject.AddComponent<Level2Ui>();
         HideHelperMeshes();
+        HideStrayBoard();
         SpawnPlayer();
         ApplyMood();
 
@@ -56,6 +57,8 @@ public sealed class Level2Director : MonoBehaviour
         Doors = gameObject.AddComponent<Level2Doors>(); Doors.Setup();
         Toys = gameObject.AddComponent<Level2Toys>(); Toys.Setup();
         Mirror = gameObject.AddComponent<Level2Mirror>(); Mirror.Setup();
+
+        Invoke(nameof(AuditFloorClutter), 1.6f);
 
         fogTimer = .4f;
     }
@@ -87,6 +90,9 @@ public sealed class Level2Director : MonoBehaviour
         if (Photo) Photo.RestoreProgress(d.photoPlaced);
         if (Toys) Toys.RestoreState(d.toys);
         if (Mirror) Mirror.RestoreStage(d.mirrorStage);
+        // 相框已经补完 = 谜题二必然已经开放。存档里万一漏了这一个位（比如补完的同一帧退出），
+        // 这里兜一次，避免玩家读档回来发现洗手台和摆放点全都没反应。
+        if (Photo && Photo.Repaired && Toys && !Toys.Unlocked) Toys.Unlock();
         Debug.Log($"[第二关] 读档完成：相片 {d.photoPlaced} 块 / 镜子 {d.mirrorStage} / 门 {d.doors}");
     }
 
@@ -254,6 +260,77 @@ public sealed class Level2Director : MonoBehaviour
         Debug.Log($"[第二关] 隐藏编辑器辅助图标渲染器 {hidden} 个");
     }
 
+    /// <summary>
+    /// 出生房间（二楼二号房）里斜靠着一块软木公告板 SM_Board_A1（场景坐标约 -20.86, 3.61, -105.06）。
+    /// 它和三个谜题都没关系，就是美术摆的一件装饰，可它正好杵在出生点脚边、贴在眼前的视野下方，
+    /// 玩家一低头就看见一大块板子。这里整个关掉（只关当前这一局，场景文件不动，编辑器里还在）。
+    /// </summary>
+    void HideStrayBoard()
+    {
+        int n = 0;
+        foreach (var t in FindObjectsOfType<Transform>(true))
+        {
+            if (!t.name.StartsWith("SM_Board_A1", System.StringComparison.OrdinalIgnoreCase)) continue;
+            if (!t.gameObject.scene.IsValid()) continue;
+            if (!t.gameObject.activeInHierarchy) continue;   // 父节点已经关掉，子节点跟着算，不重复计数
+            t.gameObject.SetActive(false);
+            n++;
+        }
+        Debug.Log(n > 0
+            ? $"[第二关] 已隐藏出生房间的软木公告板 SM_Board_A1 ×{n}"
+            : "[第二关] 没找到 SM_Board_A1（可能已经被藏起来了）");
+    }
+
+    /// <summary>
+    /// 临时排查（定位用，不动任何物件）：把出生点 10 米内“又薄又平、贴在地面这一层”的渲染器
+    /// 全部打进日志。地上那块多余的深色片看截图认不出是哪个物件，靠这份清单点名。
+    /// </summary>
+    void AuditFloorClutter()
+    {
+        if (!Player) return;
+        Vector3 origin = Player.position;
+        int n = 0;
+        foreach (var r in FindObjectsOfType<Renderer>(true))
+        {
+            if (!r || !r.enabled || !r.gameObject.activeInHierarchy) continue;
+            if (r is ParticleSystemRenderer || r is LineRenderer || r is TrailRenderer) continue;
+            var b = r.bounds;
+            if ((b.center - origin).sqrMagnitude > 100f) continue;           // 只看 10 米内
+            Vector3 s = b.size;
+            float thin = Mathf.Min(s.x, Mathf.Min(s.y, s.z));
+            if (thin > .35f) continue;                                        // 只关心薄片
+            if (b.min.y > FloorY + .8f || b.max.y < FloorY - .25f) continue;   // 只关心地面这一层
+            float area = Mathf.Max(s.x * s.y, Mathf.Max(s.y * s.z, s.z * s.x));
+            if (area < .35f) continue;                                        // 小摆件忽略
+            string mat = r.sharedMaterial ? r.sharedMaterial.name : "(无材质)";
+            bool col = r.GetComponent<Collider>() || r.GetComponentInParent<Collider>();
+            Debug.Log($"[地面排查] {PathOf(r.transform)} 中心 {L2.Fmt(b.center)} 尺寸 {s.x:F2}×{s.y:F2}×{s.z:F2} 面积 {area:F2}m² 材质 {mat} 碰撞体 {(col ? "有" : "无")}");
+            n++;
+        }
+        Debug.Log($"[地面排查] 出生点 {L2.Fmt(origin)} 附近的薄片候选 {n} 个");
+
+        // 再撒一遍向下的射线，看脚下这块地板是不是整片都在、高度是不是都在 3.20 上下 ——
+        // 万一那块深色是“地板缺了一块、直接看到楼下”，薄片清单里就不会有任何东西，靠这一步兜住。
+        for (int i = -2; i <= 2; i++)
+        {
+            for (int j = -2; j <= 2; j++)
+            {
+                Vector3 from = origin + new Vector3(i * 1.6f, 1.4f, j * 1.6f);
+                if (Physics.Raycast(from, Vector3.down, out RaycastHit hit, 6f, ~0, QueryTriggerInteraction.Ignore))
+                    Debug.Log($"[地面排查] 射线 ({i},{j}) 命中 {hit.collider.name} 高度 {hit.point.y:F3} 距离 {hit.distance:F2}");
+                else
+                    Debug.LogWarning($"[地面排查] 射线 ({i},{j}) 落空 —— 这里没有地板");
+            }
+        }
+    }
+
+    static string PathOf(Transform t)
+    {
+        var sb = new System.Text.StringBuilder(t.name);
+        for (var p = t.parent; p; p = p.parent) sb.Insert(0, p.name + "/");
+        return sb.ToString();
+    }
+
     // ---------------- 氛围 ----------------
 
     void ApplyMood()
@@ -368,8 +445,11 @@ public sealed class Level2Director : MonoBehaviour
 
     void Intro()
     {
-        Ui.Say("这里是？", "这里是？我的房间？");
-        Ui.Say("谜题一", "请完成谜题一：修补全家福。\n\n散落在地上的相片残片，一共三张。");
+        // 开场四页：先是一头雾水，再让玩家去看看，最后把“改造这个家”交给他，末尾接谜题一的目标。
+        Ui.Say("疑惑", "我这是又来到了哪儿？");
+        Ui.Say("四处看看", "你可以四处看看周围的环境怎么样。");
+        Ui.Say("动手吧", "是不是很糟糕了，跟你之前的家相比差距很大，那么现在由你来改造他们吧！");
+        Ui.Say("谜题一", "请完成谜题一：修补全家福。\n\n散落在地上的相片残片，一共三张。\n\n其余的事，等我先把这张照片补好再说。");
     }
 }
 
