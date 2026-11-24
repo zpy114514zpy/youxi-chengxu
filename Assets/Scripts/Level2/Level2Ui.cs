@@ -458,7 +458,8 @@ public sealed class Level2Ui : MonoBehaviour
             }
             y += btnH + gap;
         }
-        DrawBottomRow(f);
+        // 问答页空格是无效的，底部别再写“空格继续”误导玩家，直接说清楚要选一个。
+        DrawBottomRow(f, n > 0 ? "点上面的选项回答" : null);
     }
 
     /// <summary>
@@ -542,7 +543,7 @@ public sealed class Level2Ui : MonoBehaviour
     /// <summary>
     /// 面板底部一行：左下角“上一步”（可点击回看，能连点继续往前翻），右下角“空格继续 / 空格返回”。
     /// </summary>
-    void DrawBottomRow(Frames f)
+    void DrawBottomRow(Frames f, string hintOverride = null)
     {
         float pillH = Mathf.Min(f.row.height, Mathf.Round(34f * f.scale));
         float pillW = Mathf.Min(Mathf.Round(150f * f.scale), f.row.width * .34f);
@@ -552,7 +553,7 @@ public sealed class Level2Ui : MonoBehaviour
         if (BackButton(backRect, hintSize, backSteps.Count > 0, false)) pendingBack = true;
 
         var hintColor = new Color(.86f, .85f, .80f, .92f);
-        string hint = reviewing != null ? "空格返回" : "空格继续";
+        string hint = hintOverride ?? (reviewing != null ? "空格返回" : "空格继续");
         GUI.Label(new Rect(f.row.x + pillW + 8f, f.row.y, f.row.width - pillW - 8f, f.row.height),
             hint, Style(hintSize, TextAnchor.MiddleRight, hintColor));
     }

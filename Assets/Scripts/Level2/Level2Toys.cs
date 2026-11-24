@@ -24,7 +24,7 @@ public sealed class Level2Toys : MonoBehaviour
     Transform guitar;
     Level2GuitarSpot guitarSpot;
 
-    bool unlocked, foundAll, placedAll, guitarTaken, guitarPlaced, leftRoomNotified, lockedNotified;
+    bool unlocked, foundAll, placedAll, guitarTaken, guitarPlaced, lockedNotified, toysNoticed;
     public bool Unlocked => unlocked;
 
     public void Setup()
@@ -38,7 +38,20 @@ public sealed class Level2Toys : MonoBehaviour
     public void Unlock()
     {
         unlocked = true;
+        // 谜题二一开，吉他也亮起和玩偶一样的蓝描边：这会儿还拿不起来，但玩家一眼就知道它也是目标之一。
+        EnsureGuitarOutline();
         Debug.Log("[谜题二] 已解锁");
+    }
+
+    /// <summary>
+    /// 给还没变成“可拾取物”的吉他补一层蓝描边。
+    /// 已经 WrapPickup 过的吉他（外壳上有 PickupItem）在包装时自带描边，不能再加，否则两层叠在一起描边会粗一倍。
+    /// </summary>
+    void EnsureGuitarOutline()
+    {
+        if (!guitar) return;
+        if (guitar.GetComponentInChildren<PickupItem>(true)) return;
+        L2.AddBlueOutline(guitar);
     }
 
     // ---------------- 玩偶 ----------------
@@ -186,6 +199,11 @@ public sealed class Level2Toys : MonoBehaviour
         if (!guitar) return;
         if (guitar.GetComponentInChildren<PickupItem>(true)) return;
 
+        // 吉他本体上那层描边是补完相框时为了提示加的，包装成可拾取物后外壳会重新挂一层，
+        // 先把它卸掉，免得同一把琴上叠两层描边（看起来会粗一倍）。
+        var old = guitar.GetComponent<ProximityOutline>();
+        if (old) { old.enabled = false; Destroy(old); }
+
         var host = L2.WrapPickup(guitar, "破损的吉他", "l2_guitar", "乐器", .3f, .3f,
             "断了两根弦的旧吉他，琴身上还有小时候贴的贴纸。");
         if (!host) return;
@@ -235,13 +253,24 @@ public sealed class Level2Toys : MonoBehaviour
             int idx = System.Array.IndexOf(ToyIds, id);
             if (idx >= 0 && idx < toys.Count && toys[idx]) Level2CleanToys.Cleanse(toys[idx]);
 
-            Ui?.Note("清洗玩偶", $"洗掉了一层灰，也变回了干净的样子（{washed.Count} / 4）。");
-            if (washed.Count >= ToyIds.Length && !placedAll)
-                Ui?.Say("可以放回去了", "四个玩偶都洗干净了。把它们放回二楼一号房间原来的位置吧。");
+            // 每洗完一只都给一句明确的进度 + 下一步该干什么；洗到最后一只就直接指向“放回去”。
+            if (washed.Count < ToyIds.Length)
+            {
+                Ui?.Note("清洗玩偶", $"你已经找到第{Word(washed.Count)}个玩偶并清洗干净，现在去找寻下一个吧！");
+            }
+            else
+            {
+                Ui?.Note("清洗玩偶", "四个玩偶都洗干净了。");
+                if (!placedAll)
+                    Ui?.Say("可以放回去了", "把它们放回二楼一号房间原来的位置吧。");
+            }
             return true;
         }
         return false;
     }
+
+    /// <summary>1~4 转成中文数字（“第一个玩偶”这种说法在提示里读起来比“第 1 个”自然）。</summary>
+    static string Word(int n) => n >= 1 && n <= 4 ? "一二三四"[n - 1].ToString() : n.ToString();
 
     // ---------------- 摆放 ----------------
 
@@ -362,7 +391,8 @@ public sealed class Level2Toys : MonoBehaviour
         if (placedAll) return;
         placedAll = true;
         Debug.Log("[谜题二] 四个玩偶全部归位");
-        Ui?.Say("归位完成", "玩偶放置好了，该去收拾我的吉他了。");
+        Ui?.Say("归位完成", "恭喜完成玩偶整理归位。");
+        Ui?.Say("下一步", "请接着去将吉他一并归位。");
         UnlockGuitar();
     }
 
@@ -379,7 +409,7 @@ public sealed class Level2Toys : MonoBehaviour
     {
         if (guitarTaken) return;
         guitarTaken = true;
-        Ui?.Say("吉他", "我得把吉他也送回二楼一号房间 ——\n搁在一号小房间那张沙发上，琴背靠着靠背摆好。");
+        Ui?.Say("吉他", "这个吉他本不属于这里，请将其带回那个积木放置的地方。");
         BuildGuitarSpot();
     }
 
@@ -699,8 +729,10 @@ public sealed class Level2Toys : MonoBehaviour
         if (guitarPlaced) return;
         guitarPlaced = true;
         Debug.Log("[谜题二] 吉他归位，谜题二完成");
-        Ui?.Say("内心独白", "玩具已经坏了，就像当年那个满怀期待的小孩，也受过很多伤。\n但我依旧可以把他好好安放。");
-        Ui?.Note("新的目标", "去一楼客厅看看吧。");
+        // 吉他归位的收尾三页：道喜 → 一句留给玩家的心里话 → 指向一楼客厅最后一项。
+        Ui?.Say("谜题二完成", "恭喜完成吉他归位，让它找到属于自己的地方。");
+        Ui?.Say("它们一直都在", "虽然玩具和吉他已经换了，但是只要我们不忘记它们，那它们就一直存在！");
+        Ui?.Say("最后一项", "请前往一楼客厅完成最后一项有意义的任务吧！");
         if (Level2Director.Instance && Level2Director.Instance.Mirror) Level2Director.Instance.Mirror.Unlock();
     }
 
@@ -768,9 +800,16 @@ public sealed class Level2Toys : MonoBehaviour
         }
         foundAll = foundAll || washed.Count > 0 || placedAll;
 
+        // 读档不重播“玩偶脏了、去三号门洗”那段：洗过、摆过，或手上还拿着玩偶，就当这段已经讲过了。
+        if (washed.Count > 0 || placedAll) toysNoticed = true;
+        if (inv && BagCount(inv) > 0) toysNoticed = true;
+
         // 拿到过吉他就要把放置点建出来 —— 否则“拿了没放”的存档读回来，玩家找不到地方放。
         if (guitarTaken) BuildGuitarSpot();
         if (guitarPlaced) RestoreGuitar();
+
+        // 读档时 unlocked 是直接赋值的，不走 Unlock()，这里补一次吉他的蓝描边。
+        if (unlocked) EnsureGuitarOutline();
 
         Debug.Log($"[谜题二] 读档恢复：洗了 {washed.Count} 个，摆了 {PlacedCount()} 个，吉他 {guitarTaken}/{guitarPlaced}");
     }
@@ -825,21 +864,11 @@ public sealed class Level2Toys : MonoBehaviour
         AttachGuitar(pick);
     }
 
-    // ---------------- 房间离开检测 ----------------
+    // ---------------- 提示检测 ----------------
 
     void Update()
     {
         var player = Level2Director.Instance ? Level2Director.Instance.Player : null;
-
-        if (unlocked && !leftRoomNotified && player)
-        {
-            // 二号房间在 z 更小的一侧，穿过 A2 门（z≈-101.7）就算离开了这个房间。
-            if (player.position.y > 2.8f && player.position.z > -101.0f && !placedAll)
-            {
-                leftRoomNotified = true;
-                Ui?.Say("谜题二", "请完成谜题二：归位残破玩具。\n\n这个房间里的玩偶和吉他，本来都该在隔壁。");
-            }
-        }
 
         if (!unlocked && !lockedNotified)
         {
@@ -852,14 +881,28 @@ public sealed class Level2Toys : MonoBehaviour
             }
         }
 
+        // 相框修好之后，第一次把玩偶拿在手上：先解释它们为什么脏，再指路去洗。
+        // 只弹一次；哪怕玩家补画前就先捡了玩偶，解锁那一刻也会补上这两句，不会漏掉指引。
+        if (unlocked && !toysNoticed)
+        {
+            var inv = FindObjectOfType<PlayerInventory>();
+            if (inv && BagCount(inv) > 0)
+            {
+                toysNoticed = true;
+                var ui = Ui;
+                if (ui)
+                {
+                    ui.Say("玩偶", "由于你的疏忽，玩偶现在已经变得很脏了，需要你去清洗它。");
+                    ui.Say("清洗", "请前往二楼一号房间的3号门进行清洗任务，然后归位。");
+                }
+            }
+        }
+
         if (!foundAll && unlocked)
         {
             var inv = FindObjectOfType<PlayerInventory>();
-            if (inv && BagCount(inv) >= ToyIds.Length)
-            {
-                foundAll = true;
-                Ui?.Say("玩偶", "四个玩偶都找到了。我需要去二层的另一个房间去进行清洗。");
-            }
+            // 只记状态（摆放点的蓝色提示要靠 foundAll 判断），不再弹“四个都找到了”的那一页。
+            if (inv && BagCount(inv) >= ToyIds.Length) foundAll = true;
         }
 
         // 吉他什么时候被捡走，这里每帧看一眼（不设“只查一次”的开关，否则错过一次就再也不触发）。

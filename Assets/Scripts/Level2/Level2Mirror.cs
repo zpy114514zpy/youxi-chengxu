@@ -315,11 +315,14 @@ public sealed class Level2Mirror : MonoBehaviour
         talked = true;
 
         Ui?.Say("内心独白", "原来我一直在和过去的自己对视。");
-        Invoke(nameof(Ask), .1f);
+        // 直接入队排在独白后面，不靠 Invoke 定时（Invoke 一旦碰上组件被禁用 / 暂停就会静默丢掉，
+        // 表现就是“独白看完、问答没出来”）。队列本身保证顺序，所以这里同步调用是安全的。
+        Ask();
     }
 
     void Ask()
     {
+        Debug.Log("[谜题三] 弹出问答页（两选一）");
         Ui?.Ask("镜子", "你现在开心吗，有什么想对此时小时候的你说？",
             new[]
             {

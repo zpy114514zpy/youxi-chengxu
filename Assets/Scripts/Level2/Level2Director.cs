@@ -52,15 +52,17 @@ public sealed class Level2Director : MonoBehaviour
         HideStrayBoard();
         SpawnPlayer();
         ApplyMood();
+        BuildLampSwitches();
 
         Photo = gameObject.AddComponent<Level2PhotoRepair>(); Photo.Setup();
         Doors = gameObject.AddComponent<Level2Doors>(); Doors.Setup();
         Toys = gameObject.AddComponent<Level2Toys>(); Toys.Setup();
         Mirror = gameObject.AddComponent<Level2Mirror>(); Mirror.Setup();
+        gameObject.AddComponent<Level2Stairs>().Setup();
 
         Invoke(nameof(AuditFloorClutter), 1.6f);
 
-        fogTimer = .4f;
+        ApplyFog();
     }
 
     void Start()
@@ -390,13 +392,32 @@ public sealed class Level2Director : MonoBehaviour
         }
     }
 
-    float fogTimer;
+    /// <summary>
+    /// 把“家里的灯”接上 E 开关，体验和第一关一样：走到灯前 → 提示「E 开灯」→ 按 E 亮起，再按关掉。
+    /// 只挑有点分量的灯（点光 / 射灯、强度够），天光和很弱的补光不参与 ——
+    /// 否则玩家随手一按就能把整间屋子按成全黑，谜题也看不清了。
+    /// </summary>
+    void BuildLampSwitches()
+    {
+        int n = 0;
+        foreach (var l in FindObjectsOfType<Light>(true))
+        {
+            if (!l || !l.enabled) continue;
+            if (l.type == LightType.Directional || l.type == LightType.Rectangle) continue;
+            if (l.intensity < .30f) continue;
+            if (!Level2LampSwitch.AttachTo(l)) continue;
+            n++;
+            Debug.Log($"[第二关] 灯具开关：{l.name} {L2.Fmt(l.transform.position)} 强度 {l.intensity:F2} 范围 {l.range:F1}m");
+        }
+        Debug.Log($"[第二关] 可开关的灯 {n} 盏（准星对准按 E 开 / 关）");
+    }
 
     void Update()
     {
-        // FutureFog 在 PlayerController.Start 里才设雾，这里每隔几秒把它盖回“屋里清楚、屋外白雾”。
-        fogTimer -= Time.deltaTime;
-        if (fogTimer <= 0f) { fogTimer = 2.5f; ApplyFog(); }
+        // 第二关不要雾：FutureFog 会在它自己的 Start 里把雾打开一次，
+        // 而 Unity 的距离雾以相机为圆心算，一楼走廊十几米长，整片糊成一堵白墙、走一步退一步。
+        // 这里每帧确认雾是关的（只有被别处打开时才写一次，开销可以忽略）。
+        if (RenderSettings.fog) RenderSettings.fog = false;
 
         CheckDownstairs();
     }
@@ -425,19 +446,16 @@ public sealed class Level2Director : MonoBehaviour
 
     void ApplyFog()
     {
-        // FutureFog 会把它自己的雾参数写进来，这里往远处推一点：
-        // 屋内要看得清，只有窗外和楼下大门外才该是一片朦胧白雾。
-        RenderSettings.fog = true;
-        RenderSettings.fogMode = FogMode.Linear;
-        RenderSettings.fogColor = new Color(.88f, .90f, .93f);
-        RenderSettings.fogStartDistance = 13f;
-        RenderSettings.fogEndDistance = 36f;
+        // 第二关整关关掉雾。原来那套“屋里清楚、窗外白雾”在二楼房间看不出来，
+        // 但一楼走廊有十几米深，整片都落在雾带里 —— 玩家看到的就是面前一堵白墙，
+        // 而且人往前走它就往后退。这里只保留相机背景的冷灰天光，室内不再有任何雾。
+        RenderSettings.fog = false;
 
         var cam = Camera.main;
         if (cam)
         {
             cam.clearFlags = CameraClearFlags.SolidColor;
-            cam.backgroundColor = RenderSettings.fogColor;
+            cam.backgroundColor = new Color(.80f, .83f, .86f);
         }
     }
 
