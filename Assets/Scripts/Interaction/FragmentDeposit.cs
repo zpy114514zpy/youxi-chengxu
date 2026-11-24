@@ -2,12 +2,13 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-/// <summary>二楼“获取钥匙的地点”：把所有信封碎片放到这里之后进入第二关。</summary>
+/// <summary>二楼“获取钥匙的地点”：把所有信封碎片放到这里之后，开一道通往第二关的光门。</summary>
 public sealed class FragmentDeposit : MonoBehaviour
 {
     public string nextScene = "Level 2";
     public string requiredFragment = "信封碎片⑤";
     public bool filled;
+    public LevelPortal portal;
 
     Light[] glows;
     float[] baseIntensity;
@@ -52,13 +53,33 @@ public sealed class FragmentDeposit : MonoBehaviour
         foreach (var c in GetComponentsInChildren<Collider>()) c.enabled = false;
         foreach (var l in GetComponentsInChildren<Light>()) l.enabled = false;
 
-        story?.EnqueueCenter("任务完成", "恭喜完成关卡1所有任务！");
-        StartCoroutine(GoNextLevel());
+        story?.EnqueueCenter("任务完成", "恭喜完成关卡1所有任务！\n走进那道光门，去往下一章。");
+        StartCoroutine(OpenPortal());
+    }
+
+    /// <summary>
+    /// 碎片归位的瞬间不直接切场景 —— 先在旁边立一道光门，让玩家自己走进去。
+    /// 位置交给 LevelPortal 自己找：挑最空的方向、落到地面上、正面朝回放置点。
+    /// </summary>
+    IEnumerator OpenPortal()
+    {
+        yield return new WaitForSecondsRealtime(1.1f);
+        portal = LevelPortal.OpenNear(transform.position, nextScene);
+
+        if (!portal)
+        {
+            // 周围实在没地方立门（或被家具围死）：退回到直接加载，别把玩家卡在这一关
+            Debug.LogWarning("[碎片放置] 光门没找到合适的落点，直接进入下一关。", this);
+            StartCoroutine(GoNextLevel());
+            yield break;
+        }
+
+        Debug.Log($"[碎片放置] 光门已开启：{portal.transform.position:F2}，朝向 {portal.transform.forward:F2}", this);
     }
 
     IEnumerator GoNextLevel()
     {
-        yield return new WaitForSecondsRealtime(3.2f);
+        yield return new WaitForSecondsRealtime(1.6f);
         if (!Application.CanStreamedLevelBeLoaded(nextScene))
         {
             Debug.LogWarning("[碎片放置] 场景 " + nextScene + " 不在 Build Settings 里，无法加载。", this);

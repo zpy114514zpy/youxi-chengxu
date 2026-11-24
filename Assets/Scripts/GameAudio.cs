@@ -23,7 +23,7 @@ public sealed class GameAudio : MonoBehaviour
     public const float StepLength = .90f;
 
     AudioSource bgm, sfx, steps, push, page, world;
-    AudioClip bgmClip, itemClip, stepClip, pushClip, pageClip, doorClip, lampClip;
+    AudioClip bgmClip, itemClip, stepClip, pushClip, pageClip, doorClip, lampClip, portalClip;
     float lastPageAt = -1f;
     bool pushing;
     bool walkingState;
@@ -54,6 +54,8 @@ public sealed class GameAudio : MonoBehaviour
         // 开门 / 拉抽屉：真实录音（木门吱呀打开），开灯仍是合成音。
         doorClip = Resources.Load<AudioClip>("GameAudio/door_open");
         lampClip = Resources.Load<AudioClip>("GameAudio/lamp_switch");
+        // 光门开启：一声 2.4 秒的“上扬 + 清铃”，转场时垫在淡入淡出下面。
+        portalClip = Resources.Load<AudioClip>("GameAudio/portal_open");
 
         if (!bgmClip) Debug.LogWarning("[音频] 找不到背景音乐 Resources/GameAudio/bgm_main");
         if (!itemClip) Debug.LogWarning("[音频] 找不到拾取/放置音效 Resources/GameAudio/pickup_item");
@@ -62,6 +64,7 @@ public sealed class GameAudio : MonoBehaviour
         if (!pageClip) Debug.LogWarning("[音频] 找不到提示翻页音效 Resources/GameAudio/ui_page");
         if (!doorClip) Debug.LogWarning("[音频] 找不到开门音效 Resources/GameAudio/door_open");
         if (!lampClip) Debug.LogWarning("[音频] 找不到开关灯音效 Resources/GameAudio/lamp_switch");
+        if (!portalClip) Debug.LogWarning("[音频] 找不到光门音效 Resources/GameAudio/portal_open");
 
         bgm = Make("背景音乐", bgmClip, BgmVolume, true);
         // 拾取 / 放置：clips 由 PlayOneShot 传，音源自己不挂 clip。
@@ -82,6 +85,7 @@ public sealed class GameAudio : MonoBehaviour
                   $"提示翻页 {(pageClip ? pageClip.length.ToString("F2") + "s" : "缺失")}，" +
                   $"开门 {(doorClip ? doorClip.length.ToString("F2") + "s" : "缺失")}，" +
                   $"开关灯 {(lampClip ? lampClip.length.ToString("F2") + "s" : "缺失")}，" +
+                  $"光门 {(portalClip ? portalClip.length.ToString("F2") + "s" : "缺失")}，" +
                   $"脚步 {(stepClip ? stepClip.length.ToString("F2") + "s" : "缺失")}，" +
                   $"推 {(pushClip ? pushClip.length.ToString("F2") + "s" : "缺失")}");
     }
@@ -177,6 +181,15 @@ public sealed class GameAudio : MonoBehaviour
         if (!a || !a.world || !a.doorClip) return;
         a.world.pitch = Mathf.Clamp(pitch, .5f, 2f);
         a.world.PlayOneShot(a.doorClip, Mathf.Clamp01(volume));
+    }
+
+    /// <summary>光门开启 / 走进去：一声上扬的“嗡——叮”。</summary>
+    public static void PlayPortal()
+    {
+        var a = Instance;
+        if (!a || !a.world || !a.portalClip) return;
+        a.world.pitch = 1f;
+        a.world.PlayOneShot(a.portalClip, .9f);
     }
 
     /// <summary>拨墙上的灯开关：一声短促的“咔哒”。</summary>
