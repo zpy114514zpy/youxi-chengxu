@@ -18,7 +18,7 @@ public sealed class OpeningSequence : MonoBehaviour
 {
     public static OpeningSequence Instance { get; private set; }
 
-    enum Phase { Idle, Video, Menu, Playing }
+    enum Phase { Idle, Cover, Blank, Video, Menu, Playing }
 
     Phase phase = Phase.Idle;
     VideoPlayer video;
@@ -29,6 +29,11 @@ public sealed class OpeningSequence : MonoBehaviour
     float videoStart;
     float fadeAlpha = 0f;
     bool skipRequested;
+
+    // 最前面的封面
+    Texture2D coverTex;
+    float coverAlpha;
+    bool coverReady;
     static bool playedOnce;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -73,6 +78,9 @@ public sealed class OpeningSequence : MonoBehaviour
         yield return null;
         FreezeGame();
 
+        // 最前面先亮封面：按键 / 点击跳过，不操作就等 6 秒自己往下走。
+        yield return ShowCover();
+
         if (HasOpeningVideo())
             yield return PlayVideo();
         else
@@ -111,6 +119,99 @@ public sealed class OpeningSequence : MonoBehaviour
         foreach (var c in FindObjectsOfType<PlayerInventory>(true)) if (c) c.enabled = on;
         foreach (var c in FindObjectsOfType<StoryProgress>(true)) if (c) c.enabled = on;
         foreach (var c in FindObjectsOfType<GameMenu>(true)) if (c) c.enabled = on;
+    }
+
+    // ---------------------------------------------------------------- 封面
+
+    const float CoverFadeIn = .55f;       // 淡入时长
+    const float CoverInputDelay = 1f;     // 淡入完成后再等这么久才认空格，防止手滑
+
+    static string CoverPath => Path.Combine(Application.streamingAssetsPath, "game_cover.png");
+
+    IEnumerator ShowCover()
+    {
+        phase = Phase.Cover;
+        GameAudio.SetBgmMuted(true);     // 封面上不要压着关卡背景音乐
+
+        coverTex = LoadTexture(CoverPath, "GameCover/game_cover");
+        if (!coverTex)
+        {
+            Debug.LogWarning("[开场] 找不到封面图在 " + CoverPath + "，直接进序幕。");
+            phase = Phase.Idle;
+            yield break;
+        }
+
+        coverReady = true;
+        coverAlpha = 0f;
+        Debug.Log("[开场] 封面已显示：" + coverTex.width + "×" + coverTex.height + "，等待玩家按空格");
+
+        // 封面不自动消失：玩家不按空格就一直停在这一页。
+        float t = 0f;
+        bool acceptInput = false;
+        while (true)
+        {
+            if (acceptInput && Input.GetKeyDown(KeyCode.Space)) break;
+
+            // 关键：进播放模式头几帧的 unscaledDeltaTime 可能是 1~2 秒（编译着色器 / 读场景），
+            // 直接累加会让等待时间在三四帧内跑完，封面一闪而过。每帧最多算 0.05 秒。
+            t += Mathf.Min(Time.unscaledDeltaTime, .05f);
+            coverAlpha = Mathf.Clamp01(t / CoverFadeIn);
+            if (!acceptInput && t > CoverFadeIn + CoverInputDelay) acceptInput = true;
+
+            yield return null;
+        }
+        coverAlpha = 1f;
+        Debug.Log("[开场] 玩家按空格跳过封面");
+
+        // 淡出，别硬切
+        float d = 0f;
+        while (d < .45f)
+        {
+            d += Mathf.Min(Time.unscaledDeltaTime, .05f);
+            coverAlpha = 1f - Mathf.Clamp01(d / .45f);
+            yield return null;
+        }
+
+        coverReady = false;
+        coverAlpha = 0f;
+        if (coverTex)
+        {
+            UnityEngine.Object.Destroy(coverTex);
+            coverTex = null;
+        }
+        phase = Phase.Blank;             // 黑场过渡：别让冻结的关卡画面闪出来
+        yield return null;               // 淡出已经吃掉了这次按键，不会顺带把序幕也跳掉
+    }
+
+    /// <summary>
+    /// 直接读文件生成贴图：不受贴图导入类型（Default / Sprite）影响，怎么导都不会丢。
+    /// Resources 只是兜底。
+    /// </summary>
+    static Texture2D LoadTexture(string file, string resourcePath)
+    {
+        try
+        {
+            if (File.Exists(file))
+            {
+                var bytes = File.ReadAllBytes(file);
+                var tex = new Texture2D(2, 2, TextureFormat.RGBA32, false) { hideFlags = HideFlags.DontSave };
+                if (tex.LoadImage(bytes)) return tex;
+                UnityEngine.Object.Destroy(tex);
+            }
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning("[开场] 封面读取失败：" + e.Message);
+        }
+
+        var direct = Resources.Load<Texture2D>(resourcePath);
+        if (direct) return direct;
+        foreach (var o in Resources.LoadAll(resourcePath))
+        {
+            if (o is Texture2D tex2) return tex2;
+            if (o is Sprite sp && sp.texture) return sp.texture;
+        }
+        return null;
     }
 
     // ---------------------------------------------------------------- 视频
@@ -204,6 +305,7 @@ public sealed class OpeningSequence : MonoBehaviour
     void ShowMenu()
     {
         phase = Phase.Menu;
+        GameAudio.SetBgmMuted(false);    // 不管走没走视频这条路，进菜单都把 BGM 放回来
 
         var bg = Resources.Load<Texture2D>("StoryUI/main_menu_bg");
         if (!bg) Debug.LogWarning("[开场] 找不到 Resources/StoryUI/main_menu_bg，主菜单将只有文字。");
@@ -277,6 +379,8 @@ public sealed class OpeningSequence : MonoBehaviour
     {
         GUI.depth = -4000;          // 盖在主菜单（-3000）和游戏内设置（-1000）之上
 
+        if (phase == Phase.Cover) DrawCover();
+        else if (phase == Phase.Blank) DrawBlack();
         if (phase == Phase.Video) DrawVideo();
 
         if (fadeAlpha > .001f)
@@ -286,6 +390,47 @@ public sealed class OpeningSequence : MonoBehaviour
             GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
             GUI.color = old;
         }
+    }
+
+    void DrawBlack()
+    {
+        var old = GUI.color;
+        GUI.color = Color.black;
+        GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+        GUI.color = old;
+    }
+
+    void DrawCover()
+    {
+        if (!coverReady || !coverTex) return;
+
+        var old = GUI.color;
+        GUI.color = Color.black;
+        GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+        GUI.color = old;
+
+        // 等比放到屏幕能放下的最大尺寸：宁可留黑边，也不裁掉左边的「信」和标题。
+        float tw = coverTex.width, th = coverTex.height;
+        float scale = Mathf.Min(Screen.width / tw, Screen.height / th);
+        float w = tw * scale, h = th * scale;
+        var rect = new Rect((Screen.width - w) * .5f, (Screen.height - h) * .5f, w, h);
+
+        GUI.color = new Color(1f, 1f, 1f, coverAlpha);
+        GUI.DrawTexture(rect, coverTex, ScaleMode.StretchToFill, false);
+        GUI.color = old;
+
+        if (!font) return;
+        // 提示呼吸闪烁，但只在淡入完成后再出现
+        float blink = .55f + .25f * Mathf.Sin(Time.unscaledTime * 2.6f);
+        float hintAlpha = Mathf.Clamp01((coverAlpha - .85f) / .15f) * blink;
+        var style = new GUIStyle(GUI.skin.label)
+        {
+            font = font,
+            fontSize = 18,
+            alignment = TextAnchor.MiddleRight,
+            normal = { textColor = new Color(1f, 1f, 1f, hintAlpha) },
+        };
+        GUI.Label(new Rect(Screen.width - 400f, Screen.height - 56f, 360f, 32f), "按 空格 继续", style);
     }
 
     void DrawVideo()
