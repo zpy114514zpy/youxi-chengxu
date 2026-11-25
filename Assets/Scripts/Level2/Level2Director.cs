@@ -53,6 +53,7 @@ public sealed class Level2Director : MonoBehaviour
         SpawnPlayer();
         ApplyMood();
         BuildLampSwitches();
+        BuildWallSwitches();
 
         Photo = gameObject.AddComponent<Level2PhotoRepair>(); Photo.Setup();
         Doors = gameObject.AddComponent<Level2Doors>(); Doors.Setup();
@@ -406,6 +407,57 @@ public sealed class Level2Director : MonoBehaviour
             Debug.Log($"[第二关] 灯具开关：{l.name} {L2.Fmt(l.transform.position)} 强度 {l.intensity:F2} 范围 {l.range:F1}m");
         }
         Debug.Log($"[第二关] 可开关的灯 {n} 盏（准星对准按 E 开 / 关）");
+    }
+
+    /// <summary>
+    /// 墙上的白色开关面板：Unreal 场景里这些板子叫 SM_Outlet_*，本身没有碰撞体、也不是灯。
+    /// 这里给每块面板补一个交互盒，按 E 控制它头顶最近的那盏灯（也就是这个房间的天花板灯），
+    /// 和灯本体上的开关共享同一个 RoomLamp —— 从哪边关，另一边看到的状态都一致。
+    /// </summary>
+    void BuildWallSwitches()
+    {
+        var lights = new List<Light>();
+        foreach (var l in FindObjectsOfType<Light>(true))
+        {
+            if (!l || !l.enabled) continue;
+            if (l.type == LightType.Directional || l.type == LightType.Rectangle) continue;
+            if (l.intensity < .30f) continue;
+            lights.Add(l);
+        }
+
+        int n = 0;
+        var seen = new HashSet<Transform>();
+        // 遍历渲染器而不是全部 Transform：场景里有两万多个 prefab 实例，渲染器少得多，
+        // 而且开关面板本来就得有可见模型。
+        foreach (var r in FindObjectsOfType<Renderer>(true))
+        {
+            if (!r) continue;
+            Transform panel = null;
+            var t = r.transform;
+            for (int i = 0; i < 3 && t; i++, t = t.parent)
+                if (t.name.Contains("Outlet") || t.name.Contains("LightSwitch") || t.name.Contains("WallSwitch"))
+                { panel = t; break; }
+            if (!panel || !seen.Add(panel)) continue;
+
+            var pos = panel.position;
+            Light best = null;
+            float bestScore = 4.5f;      // 4.5 米内找不到合适的灯就不挂，否则会跑去开隔壁房间的灯
+            foreach (var l in lights)
+            {
+                var lp = l.transform.position;
+                float dy = lp.y - pos.y;
+                if (dy < 1.5f) continue; // 灯必须在面板上方 —— 说明这盏灯装在天花板上
+                float horiz = Vector2.Distance(new Vector2(lp.x, lp.z), new Vector2(pos.x, pos.z));
+                float score = horiz + Mathf.Abs(dy - 2.6f) * .35f;
+                if (score < bestScore) { bestScore = score; best = l; }
+            }
+            if (!best) continue;
+            if (!Level2LampSwitch.AttachPanel(panel.gameObject, best, .34f)) continue;
+
+            n++;
+            Debug.Log($"[第二关] 墙面开关 {panel.name} {L2.Fmt(pos)} → 控制 {best.name} {L2.Fmt(best.transform.position)}");
+        }
+        Debug.Log($"[第二关] 墙面开关 {n} 个（准星对准墙上的面板按 E 开 / 关灯）");
     }
 
     void Update()

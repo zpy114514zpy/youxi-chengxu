@@ -6,6 +6,8 @@ public sealed class PlayerInventory : MonoBehaviour
     /// <summary>背包界面已经移除（按 B 不会再打开任何东西）。这个属性保留，只为兼容旧的判空调用。</summary>
     public bool IsOpen => false;
     public float reach=1.7f;
+    /// <summary>灯具（台灯、吊灯）允许比普通交互再远一点：它们装在柜子上、天花板上，准星凑不到灯罩跟前。</summary>
+    public float lampReach=2.6f;
     [Range(1,20)] public int capacity=20;
     readonly List<PickupItem> items=new List<PickupItem>();
     int selected;
@@ -29,7 +31,8 @@ public sealed class PlayerInventory : MonoBehaviour
         if(Cursor.lockState==CursorLockMode.Locked&&Input.GetKeyDown(KeyCode.G))Drop();
         if(Cursor.lockState!=CursorLockMode.Locked)return;
         var cam=Camera.main;if(!cam)return;
-        float nearest=reach;
+        float scan=Mathf.Max(reach,lampReach);
+        float nearest=scan;
         // 抽屉里的东西总是先撞到柜板，所以“能捡的道具”单独记一份，最后让它优先于抽屉/柜门。
         PickupItem reachableItem=null;
         float reachableItemDistance=float.MaxValue;
@@ -38,9 +41,11 @@ public sealed class PlayerInventory : MonoBehaviour
         float blockFurnitureDistance=float.MaxValue;
         // 用带半径的球扫而不是细射线：信封碎片、相册这类又薄又小的东西，
         // 细射线很容易从边上擦过去，玩家明明瞄准了却按不出提示。
-        foreach(var hit in Physics.SphereCastAll(cam.transform.position,.085f,cam.transform.forward,reach,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore))
+        foreach(var hit in Physics.SphereCastAll(cam.transform.position,.085f,cam.transform.forward,scan,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore))
         {
-            if(hit.collider.transform.IsChildOf(transform)||hit.distance>=reach)continue;
+            if(hit.collider.transform.IsChildOf(transform)||hit.distance>=scan)continue;
+            // 只有灯具能用 lampReach 的距离，其余交互一律按原来的 1.7m 判，手感不变。
+            if(hit.distance>=reach&&!hit.collider.GetComponentInParent<Level2LampSwitch>())continue;
             var door=hit.collider.GetComponentInParent<InteractiveDoor>();
             var furniture=hit.collider.GetComponentInParent<FurnitureOpenable>();
             if(furniture&&hit.distance<blockFurnitureDistance){blockFurnitureDistance=hit.distance;blockFurniture=furniture;}

@@ -53,7 +53,10 @@ public sealed class FragmentDeposit : MonoBehaviour
         foreach (var c in GetComponentsInChildren<Collider>()) c.enabled = false;
         foreach (var l in GetComponentsInChildren<Light>()) l.enabled = false;
 
-        story?.EnqueueCenter("任务完成", "恭喜完成关卡1所有任务！\n身后的墙上亮起了一道门……\n门的另一边，好像有什么东西在吸引着我。");
+        // 碎片归位后分三页说完：过关 → 回顾碎片 → 指向身后亮起的门。
+        story?.EnqueueCenter("任务完成", "恭喜完成关卡一的所有任务！");
+        story?.EnqueueCenter("信封碎片", "看到你收集的所有信封碎片的内容，此时的你有什么感悟吗？？？");
+        story?.EnqueueCenter("下一段旅程", "看看旁边好像有个什么东西，过去看看吧，期待你的下一段旅程。");
         StartCoroutine(OpenPortal());
     }
 

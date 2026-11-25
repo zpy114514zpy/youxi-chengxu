@@ -62,10 +62,11 @@ public sealed class StoryProgress : MonoBehaviour
     void Start()
     {
         if(!storyActive)return;
-        AddPages("一封写给未来的信", "小时候的她生活明亮而幸福。她相信长大后的自己会一直快乐，于是把美好的心愿写进一封信，留给未来的自己。", opening, true);
-        AddPages("多年以后", "成长带来接连的变故。曾经的期待一点点破碎，她变得疲惫，也不再相信童年写下的那些愿望。", opening, true);
-        AddPages("重读旧信", "多年后，她偶然翻出那封尘封的信。稚嫩的字迹仍在祝福未来，却与眼前消沉的自己格格不入。", opening, true);
-        AddPages("时光夹缝", "旧信撬开了一道时光夹缝。情绪翻涌之际，她的意识回到了童年的房间。屋外的白雾，是尚未到来的未来。", opening, true);
+        AddPages("小时候的我", "小时候的我是个什么都期待的人，期待生日，期待朋友，期待自己会长成一个很好的人！！！", opening, true);
+        AddPages("后来", "可是后来发生的事，一件一件，把这些期待给磨掉了！", opening, true);
+        AddPages("现在的我", "虽然我没有变坏，但是我也变得沮丧对生活不再期待了......", opening, true);
+        AddPages("一封旧信", "但是当我无意间看到了一封来自过去的自己写给未来自己的信！", opening, true);
+        AddPages("然后呢", "这一切又会发生什么呢，我又会有什么感悟和变化呢？？？", opening, true);
         AddPages("寻找灯光", "房间里有点黑，我需要先把灯打开", opening, true);
     }
 
