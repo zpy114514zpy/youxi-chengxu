@@ -8,6 +8,13 @@ public sealed class PlayerInventory : MonoBehaviour
     public float reach=1.7f;
     /// <summary>灯具（台灯、吊灯）允许比普通交互再远一点：它们装在柜子上、天花板上，准星凑不到灯罩跟前。</summary>
     public float lampReach=2.6f;
+    /// <summary>
+    /// 拾取专用距离。描边亮起的距离比普通交互远得多（二楼整理道具 2.6m、抽屉小物 3.0m、第二关 3.4m），
+    /// 而开门/拉抽屉只有 1.7m —— 玩家站在两米外看到一圈蓝边，准星对着它却连“E 拾取”都不出现，
+    /// 看起来就像道具坏了。所以拾取单独放宽，跟描边最亮的那一档对齐。
+    /// 书桌本身就有 1.9m 宽，站在桌子对面够桌上的东西，必须比 1.7m 远。
+    /// </summary>
+    public float pickupReach=2.6f;
     [Range(1,20)] public int capacity=20;
     readonly List<PickupItem> items=new List<PickupItem>();
     int selected;
@@ -19,6 +26,11 @@ public sealed class PlayerInventory : MonoBehaviour
     Font font;
     StoryPlacement[] placements;
     float placementRefresh;
+    // 各谜题“做完了没有”的缓存：1.5 秒刷一次，不每帧 FindObjectsOfType。
+    float blockRefresh, tidyRefresh;
+    bool blocksUnsolved, tidyUnsolved;
+    /// <summary>上一次因为“进度还没到”被挡下的道具，只用来避免同一条日志每帧刷屏。</summary>
+    PickupItem lastBlockedItem;
     void Awake(){font=Font.CreateDynamicFontFromOSFont(new[]{"Microsoft YaHei","Arial"},32);}
     void Update()
     {
@@ -31,7 +43,7 @@ public sealed class PlayerInventory : MonoBehaviour
         if(Cursor.lockState==CursorLockMode.Locked&&Input.GetKeyDown(KeyCode.G))Drop();
         if(Cursor.lockState!=CursorLockMode.Locked)return;
         var cam=Camera.main;if(!cam)return;
-        float scan=Mathf.Max(reach,lampReach);
+        float scan=Mathf.Max(Mathf.Max(reach,lampReach),pickupReach);
         float nearest=scan;
         // 抽屉里的东西总是先撞到柜板，所以“能捡的道具”单独记一份，最后让它优先于抽屉/柜门。
         PickupItem reachableItem=null;
@@ -44,8 +56,11 @@ public sealed class PlayerInventory : MonoBehaviour
         foreach(var hit in Physics.SphereCastAll(cam.transform.position,.085f,cam.transform.forward,scan,Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore))
         {
             if(hit.collider.transform.IsChildOf(transform)||hit.distance>=scan)continue;
-            // 只有灯具能用 lampReach 的距离，其余交互一律按原来的 1.7m 判，手感不变。
-            if(hit.distance>=reach&&!hit.collider.GetComponentInParent<Level2LampSwitch>())continue;
+            // 距离按“准星撞到的这个东西属于哪一类”分别判：
+            // 道具用 pickupReach（和描边对齐）、灯具用 lampReach、其余交互仍是原来的 1.7m，手感不变。
+            var nearItem=hit.collider.GetComponentInParent<PickupItem>();
+            float allowedDistance=nearItem?pickupReach:(hit.collider.GetComponentInParent<Level2LampSwitch>()?lampReach:reach);
+            if(hit.distance>=allowedDistance)continue;
             var door=hit.collider.GetComponentInParent<InteractiveDoor>();
             var furniture=hit.collider.GetComponentInParent<FurnitureOpenable>();
             if(furniture&&hit.distance<blockFurnitureDistance){blockFurnitureDistance=hit.distance;blockFurniture=furniture;}
@@ -54,7 +69,17 @@ public sealed class PlayerInventory : MonoBehaviour
             var item=hit.collider.GetComponentInParent<PickupItem>();
             // 场景里的装饰玩具、书、已经摆好的玩偶都带 PickupItem：不是当前谜题要用的东西，
             // 不允许拾取，连“E 拾取 玩具”的提示也不要出现。
-            if(item && !IsUseful(item))item=null;
+            // 被门槛挡下时打一行日志（同一件只打一次）：不然玩家只会看到“有蓝边、按 E 没反应”。
+            if(item && !IsUseful(item))
+            {
+                if(item!=lastBlockedItem)
+                {
+                    lastBlockedItem=item;
+                    Debug.Log("[拾取] "+item.displayName+"（id="+item.storyId+"）暂时不能拿：场景里没有还在等它的谜题。",item);
+                }
+                item=null;
+            }
+            else if(item)lastBlockedItem=null;
             if(item&&hit.distance<reachableItemDistance){reachableItem=item;reachableItemDistance=hit.distance;}
             if(hit.distance>=nearest)continue;
             var push=hit.collider.GetComponentInParent<PushProp>();
@@ -101,9 +126,27 @@ public sealed class PlayerInventory : MonoBehaviour
         // 但门板/抽屉面板还没打开时不许越过它 —— 否则玩家能隔着关着的柜门把里面的玩偶拿走。
         if(reachableItem&&reachableItemDistance<=nearest+.75f)
         {
-            bool behindClosedPanel=blockFurniture&&blockFurniture.OpenAmount<.35f
-                &&blockFurnitureDistance<reachableItemDistance-.02f;
-            if(!behindClosedPanel)
+            // 只有当道具**确实在那个没拉开的抽屉/柜门里**时才拦。
+            // 以前只判“面板比道具更近”，于是书桌抽屉关着的时候，桌面上的相框/茶杯/笔记本
+            // 也会被判成“隔着柜门”，玩家看得见、描着蓝边，按 E 却连提示都没有。
+            bool insideClosedPanel=false;
+            if(blockFurniture&&blockFurniture.OpenAmount<.35f
+                &&blockFurnitureDistance<reachableItemDistance-.02f)
+            {
+                // 别用包围盒猜：柜子很深，玩偶被兜底挪到柜口外面以后，XZ 仍然落在柜门的投影范围里，
+                // 一猜就把“柜外的玩偶”误判成“在柜子里”，和前面那种“看得见、捡不到”一模一样。
+                // 直接从眼睛朝道具打一条线：第一个挡住视线的确实是这块面板，才算“隔着柜门”。
+                var visual=reachableItem.GetComponentInChildren<Renderer>();
+                Vector3 at=visual?visual.bounds.center:reachableItem.transform.position;
+                Vector3 dir=at-cam.transform.position;
+                float gap=dir.magnitude;
+                if(gap>.01f&&Physics.Raycast(cam.transform.position,dir/gap,out var blocker,gap+.02f,
+                    Physics.DefaultRaycastLayers,QueryTriggerInteraction.Ignore))
+                {
+                    insideClosedPanel=blocker.collider.GetComponentInParent<FurnitureOpenable>()==blockFurniture;
+                }
+            }
+            if(!insideClosedPanel)
             {
                 target=reachableItem;
                 prompt="E 拾取 "+reachableItem.displayName;
@@ -152,33 +195,11 @@ public sealed class PlayerInventory : MonoBehaviour
         }
     }
     /// <summary>
-    /// 当前进行到第几个解密。用“已拿到的信封碎片”推断：碎片是每关唯一、顺序固定的产物，
-    /// 比另开一个状态字段更可靠（读档、回看、重进场景都不会错位）。
-    /// 1=玩偶归位 2=积木 3=密码箱 4=二号房间整理 5=客厅时钟 6=碎片集齐（只剩放置）
-    /// </summary>
-    static int PuzzleStage
-    {
-        get
-        {
-            var story=StoryProgress.Instance;
-            if(!story)return 1;
-            if(story.fragments.Contains("信封碎片⑤"))return 6;
-            if(story.fragments.Contains("信封碎片④"))return 5;
-            if(story.fragments.Contains("信封碎片③"))return 4;
-            if(story.fragments.Contains("信封碎片②"))return 3;
-            if(story.fragments.Contains("信封碎片①"))return 2;
-            return 1;
-        }
-    }
-
-    /// <summary>
     /// 这个东西该不该允许拾取。
-    /// 规则：**只放行当前这个解密任务相关的东西**，别的任务的道具先不给捡
-    /// （不然玩家能提前把钥匙、积木、整理道具一股脑捞走，后面的谜题就乱了）。
-    ///   · 当前关的玩偶 / 积木 / 整理道具 / 钥匙；
-    ///   · 信封碎片：同一时刻场上只会有一片，随时可以捡；
-    ///   · 已经全部集齐之后（只剩放置），不再限制。
-    /// 装饰玩具、书这类从头到尾都不允许拾取。
+    /// 规则：**只放行场景里还有谜题在等的东西**，纯装饰（书、玩具、已经摆好的玩偶）一律不给捡。
+    /// 判断依据全部来自场景里各谜题的实时状态，不看“拿到过哪些碎片”：
+    /// 碎片存在 PlayerPrefs 里会跨播放残留，用它推出来的进度一旦超前，
+    /// 后面几步的玩偶 / 积木 / 钥匙 / 整理道具就会全部被锁死。
     /// </summary>
     bool IsUseful(PickupItem item)
     {
@@ -188,15 +209,43 @@ public sealed class PlayerInventory : MonoBehaviour
         if(id.StartsWith("l2_"))return true;              // 第二关的道具不设门槛
         if(id.StartsWith("letter"))return true;           // 信封碎片：当前关的产物
 
-        switch(PuzzleStage)
+        // 门槛一律以「场景里这个谜题还没做完」为准，不再用碎片推断的 stage。
+        // 碎片存在 PlayerPrefs 里，重开播放、重进场景都不会清；而场景本身每次都复位。
+        // 只要残留过碎片，stage 就会跳到后面（实测 stage=5），把还在等你的
+        // 玩偶 / 积木 / 钥匙 / 整理道具全部锁死 —— 表现就是“有蓝边、准星对着、按 E 没反应”。
+        if(NeededByPlacement(id))return true;                          // 玩偶：归位点还空着
+        if(id.StartsWith("block_")&&BlocksUnsolved())return true;       // 积木：积木堆还没摆满
+        // 钥匙是开二号房间用的，要一直能捡到整理做完为止；
+        // 不能拿“密码箱还锁着”当条件 —— 箱子一开钥匙才露出来，那样反而再也捡不到。
+        if(id=="room2_key"&&TidyUnsolved())return true;
+        if(id.StartsWith("tidy_")&&TidyUnsolved())return true;         // 整理：二号房间还没收拾完
+        return false;
+    }
+
+    /// <summary>积木堆还没摆满（还有积木没归位）。</summary>
+    bool BlocksUnsolved()
+    {
+        if(Time.unscaledTime>blockRefresh)
         {
-            case 1: return NeededByPlacement(id);          // 只认这一关要归位的四只玩偶
-            case 2: return id.StartsWith("block_");        // 积木
-            case 3: return false;                          // 密码箱：没有可拾取的道具
-            case 4: return id=="room2_key"||id.StartsWith("tidy_");   // 钥匙 + 二号房间整理
-            case 5: return false;                          // 客厅时钟：没有可拾取的道具
-            default: return true;                          // 碎片集齐，只剩放置
+            blockRefresh=Time.unscaledTime+1.5f;
+            blocksUnsolved=false;
+            foreach(var puzzle in FindObjectsOfType<BlockPuzzle>())
+                if(puzzle&&!puzzle.Solved&&!puzzle.Complete){blocksUnsolved=true;break;}
         }
+        return blocksUnsolved;
+    }
+
+    /// <summary>二号房间的整理谜题还没做完（钥匙/相框/茶杯/笔记本还用得上）。</summary>
+    bool TidyUnsolved()
+    {
+        if(Time.unscaledTime>tidyRefresh)
+        {
+            tidyRefresh=Time.unscaledTime+1.5f;
+            tidyUnsolved=false;
+            foreach(var tidy in FindObjectsOfType<Room2Tidy>())
+                if(tidy&&!tidy.Solved){tidyUnsolved=true;break;}
+        }
+        return tidyUnsolved;
     }
 
     /// <summary>这件道具是不是某个还没摆好的归位点正等着的。</summary>

@@ -16,8 +16,10 @@ public sealed class DrawerFragmentReveal : MonoBehaviour
     public string drawerMeshName = "Draw 2_low";
 
     [Header("开启动画")]
-    public float slideDistance = .26f;
-    public float slideDuration = .55f;
+    [Tooltip("整只抽屉拉到位要用的时间（秒）。")]
+    public float pullDuration = 1.15f;
+    [Tooltip("量不出抽屉进深时的保底行程。")]
+    public float slideDistance = .30f;
     [Tooltip("剧情 UI 全部跳过后，再等这么久才拉开抽屉。")]
     public float delayAfterUi = .15f;
     [Tooltip("万一 UI 一直没结束，最多等这么久就强行打开。")]
@@ -26,11 +28,18 @@ public sealed class DrawerFragmentReveal : MonoBehaviour
     GameObject fragment;
     Transform drawer;
     Transform handle;
+    Vector3 openDirection = Vector3.forward;
     Vector3 fragmentOffset;
     bool placed;
+
+    // 抽屉拉到位以后要每帧钉住的世界坐标。
+    // 场景里这只抽屉上还挂着老的 FurnitureOpenable（DrawerSetup 自动装的），
+    // 它会在自己的 Update 里把抽屉写回“关着”的位置 —— 实测就是“行程 0.337，实际位移 0.000”。
+    // 所以这里不再借它做动画：自己插值、自己在 LateUpdate 里兜底。
+    bool pulled;
+    Vector3 pulledAt;
+
     Coroutine routine;
-    PlayerController player;
-    Font font;
 
     /// <summary>由 BedroomToyPuzzle 在谜题解开时调用。</summary>
     public void Begin(GameObject fragmentObject)
@@ -60,66 +69,125 @@ public sealed class DrawerFragmentReveal : MonoBehaviour
             yield break;
         }
 
-        // 用抽屉身上的 FurnitureOpenable 做动画（Update 里按 travel 滑出），
-        // 方向则由这里按几何量出来再传进去，避免模型尺寸含糊时横向滑出去。
-        var openable = drawer.GetComponent<FurnitureOpenable>();
-        if (!openable && handle) openable = handle.GetComponent<FurnitureOpenable>();
-        if (!openable) openable = drawer.GetComponentInParent<FurnitureOpenable>();
+        // 这只抽屉上原本还挂着 DrawerSetup 自动装的 FurnitureOpenable。
+        // 它每帧都会把抽屉写回“关着”的位置（上一版实测：行程 0.337m，实际位移 0.000m），
+        // 所以这里先把它停掉并移除，动画完全由本脚本自己做。
+        SilenceOpeners(drawer);
 
-        // 中间的抽屉这时才解除剧情锁。
-        if (openable) openable.UnlockByStory();
+        // 方向只可能是“垂直于柜体长轴”的那一根：抽屉绝不会沿着长轴滑出去。
+        Vector3 direction = ResolveOpenDirection(drawer);
+        openDirection = direction;
 
-        if (openable)
+        // 行程：让抽屉几乎整只退出柜体正面（背面还挂着三四厘米），
+        // 这样从任何角度看都是“整只拉出来”，而不是在柜体里挪了一小段。
+        Bounds drawerBounds = BoundsOf(drawer);
+        float depth = Mathf.Abs(Vector3.Dot(drawerBounds.size, direction));
+        float travel = Mathf.Clamp(depth * .95f, .28f, .42f);
+        if (travel < .2f) travel = slideDistance;
+
+        Vector3 closedAt = drawer.position;
+        Transform cabinet = ResolveFurnitureRoot(drawer);
+        Debug.Log("[抽屉] 目标抽屉 " + PathOf(drawer)
+            + "，所属家具 " + (cabinet ? PathOf(cabinet) + " 外框 " + BoundsOf(cabinet).size.ToString("F3") : "（没找到，按单只抽屉算）")
+            + "，关着时坐标 " + closedAt.ToString("F3"), this);
+
+        // 先往判定的方向探 8cm：如果抽屉是往柜子里缩的（抽屉外壳与柜体外壳的间距变大），
+        // 立刻掉头。这一小步只是探路，探完从它接着走，不会看到抽屉往回跳。
+        float gapBefore = Gap(cabinet, drawerBounds, direction);
+        float probe = Mathf.Min(.08f, travel * .3f);
+        yield return Slide(drawer, closedAt, closedAt + direction * probe, .18f);
+        if (!drawer) yield break;
+        float gapAfter = Gap(cabinet, BoundsOf(drawer), direction);
+
+        Vector3 from = closedAt + direction * probe;
+        if (gapAfter > gapBefore + .02f)
         {
-            DisableManualToggle(drawer);
-            openable.enabled = true;
-            openable.slide = true;
-            openable.speed = .9f;                     // 慢慢拉开，给玩家反应时间
-            // 方向用几何算（抽屉面板朝房间那一侧），不用“水平短轴=进深”的猜测。
-            Vector3 openingDirection = ResolveOpenDirection(drawer);
-            openable.OpenAlong(openingDirection);
-
-            float guard = 0f;
-            while (guard < 4f && openable && openable.OpenAmount < .995f)
-            {
-                guard += Time.deltaTime;
-                yield return null;
-            }
-            if (!drawer) yield break;
-            Debug.Log("[抽屉] 已按统一算法拉开 " + PathOf(drawer)
-                + "，方向 " + openable.OpeningDirection.ToString("F2"), this);
+            direction = -direction;
+            openDirection = direction;
+            from = closedAt;
+            if (drawer) drawer.position = closedAt;
+            Debug.LogWarning("[抽屉] 方向探路发现是往柜子里推的，已掉头：" + direction.ToString("F2"), this);
         }
-        else
-        {
-            // 没有 FurnitureOpenable 时的老路径（保底）
-            DisableManualToggle(drawer);
-            if (handle && handle != drawer) DisableManualToggle(handle);
 
-            Vector3 closed = drawer.position;
-            Vector3 direction = ResolveOpenDirection(drawer);
-            Vector3 open = closed + direction * slideDistance;
-            Debug.Log("[抽屉] 拉开 " + PathOf(drawer) + "，方向 " + direction.ToString("F2"), this);
+        // 正式拉：整只拉到位。
+        yield return Slide(drawer, from, closedAt + direction * travel, Mathf.Max(.35f, pullDuration));
+        if (!drawer) yield break;
 
-            float t = 0f;
-            while (t < slideDuration)
-            {
-                t += Time.deltaTime;
-                float k = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t / Mathf.Max(.01f, slideDuration)));
-                if (!drawer) yield break;
-                drawer.position = Vector3.Lerp(closed, open, k);
-                yield return null;
-            }
-            if (!drawer) yield break;
-            drawer.position = open;
-        }
+        float moved = (drawer.position - closedAt).magnitude;
+        float planned = (pulledAt - closedAt).magnitude;
+        Debug.Log("[抽屉] 已拉开 " + PathOf(drawer)
+            + "，方向 " + direction.ToString("F2")
+            + "，抽屉尺寸 " + drawerBounds.size.ToString("F3")
+            + "，进深 " + depth.ToString("F3") + "m"
+            + "，行程 " + travel.ToString("F3")
+            + "，实际位移 " + moved.ToString("F3") + "m"
+            + "，目标位移 " + planned.ToString("F3") + "m"
+            + "，拉开后坐标 " + drawer.position.ToString("F3"), this);
+        if (planned < .12f)
+            Debug.LogError("[抽屉] 抽屉几乎没动（" + planned.ToString("F3") + "m），行程算错了。", this);
 
         PlaceFragment();
+    }
+
+    /// <summary>
+    /// 抽屉自己（以及柜体）上的开合组件会让抽屉“关不严 / 拉不开”，
+    /// 这里把它们停掉：抽屉本体上的直接移除，祖先上的只禁用（不能把整件家具的交互拆了）。
+    /// </summary>
+    static void SilenceOpeners(Transform drawer)
+    {
+        foreach (var openable in drawer.GetComponents<FurnitureOpenable>())
+        {
+            if (!openable) continue;
+            openable.enabled = false;          // Destroy 要到帧末才生效，先把 Update 停了
+            Destroy(openable);
+        }
+
+        Transform current = drawer.parent;
+        for (int i = 0; i < 3 && current; i++, current = current.parent)
+            foreach (var openable in current.GetComponents<FurnitureOpenable>())
+                if (openable) openable.enabled = false;
+    }
+
+    /// <summary>
+    /// 抽屉外壳在 dir 方向上、离柜体外壳还有多远（越大越像“缩在柜子里面”）。
+    /// 朝外拉会变小，往柜子里推会变大 —— 用来确认方向没判反。
+    /// </summary>
+    static float Gap(Transform cabinet, Bounds drawerBounds, Vector3 dir)
+    {
+        if (!cabinet) return 0f;
+        return MaxAlong(BoundsOf(cabinet), dir) - MaxAlong(drawerBounds, dir);
+    }
+
+    /// <summary>
+    /// 直线滑出。每帧同时更新 pulledAt，LateUpdate 里再兜一次底 ——
+    /// 就算场景里还有别的组件（老的 FurnitureOpenable、动画）在同一帧把抽屉按回去，也不影响。
+    /// </summary>
+    IEnumerator Slide(Transform target, Vector3 from, Vector3 to, float duration)
+    {
+        pulled = true;
+        pulledAt = from;
+        float t = 0f;
+        while (t < duration)
+        {
+            t += Mathf.Min(Time.deltaTime, .05f);
+            float k = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t / Mathf.Max(.01f, duration)));
+            pulledAt = Vector3.Lerp(from, to, k);
+            if (!target) yield break;
+            target.position = pulledAt;
+            yield return null;
+        }
+        pulledAt = to;
+        if (target) target.position = to;
     }
 
     void PlaceFragment()
     {
         Bounds bounds = BoundsOf(drawer);
-        Vector3 target = new Vector3(bounds.center.x, bounds.min.y + .02f, bounds.center.z);
+        // 就放抽屉底板正中（不再往开口方向挪）：抽屉已经整只拉出来了，中间这个点
+        // 从上方/正面都能看见；而往开口挪会让纸片在抽屉还没拉开时先跑到柜体外面，
+        // 看起来就是“碎片飘在床前”。
+        Vector3 target = bounds.center;
+        target.y = bounds.min.y + .03f;
         // 纸片平放，只保留原有朝向。
         fragment.transform.SetPositionAndRotation(target, Quaternion.Euler(0f, fragment.transform.eulerAngles.y, 0f));
 
@@ -157,28 +225,9 @@ public sealed class DrawerFragmentReveal : MonoBehaviour
         outline.Apply(new Color(1f, .78f, .16f, .85f), .016f, 8f);   // 站在书桌前一定看得见，远了也不用亮
     }
 
-    /// <summary>碎片附近给一条“E 拾取”的浮字，配合底部操作条一起提示。</summary>
-    void OnGUI()
-    {
-        if (!placed || !fragment || !fragment.activeSelf) return;
-        var story = StoryProgress.Instance;
-        if (story && story.IsShowingPage) return;
-        var cam = Camera.main;
-        if (!cam) return;
-        if (!player) player = FindObjectOfType<PlayerController>();
-        if (player && (player.transform.position - fragment.transform.position).sqrMagnitude > 36f) return;
-
-        Vector3 screen = cam.WorldToScreenPoint(fragment.transform.position + Vector3.up * .14f);
-        if (screen.z <= 0f) return;
-        if (!font) font = Font.CreateDynamicFontFromOSFont(new[] { "Microsoft YaHei", "SimHei", "Arial" }, 20);
-        var style = new GUIStyle(GUI.skin.box) { font = font, fontSize = 15, alignment = TextAnchor.MiddleCenter };
-        GUI.Box(new Rect(screen.x - 112f, Screen.height - screen.y - 40f, 224f, 30f), "E 拾取 信封碎片①", style);
-    }
-
-    void OnDestroy()
-    {
-        if (font) Destroy(font);
-    }
+    // 碎片自己的“E 拾取”浮字已经去掉了：游戏本体的交互提示会自己显示，
+    // 这里再画一条会在屏幕上出现两条一模一样的提示（而且碎片收着的时候也会画出来，
+    // 看起来像“抽屉还没拉开，碎片就已经弹出来了”）。
 
     static void EnsurePickCollider(Transform t)
     {
@@ -199,10 +248,15 @@ public sealed class DrawerFragmentReveal : MonoBehaviour
         box.isTrigger = false;
     }
 
-    // 抽屉还能被关回去时，碎片跟着一起动，不会浮在半空。
+    // 抽屉拉到位以后每帧再钉一次：场景里那个老的 FurnitureOpenable 会在 Update 里
+    // 把抽屉写回“关着”的位置，只靠协程赋值会被它按回去（实测位移 0.000m）。
+    // LateUpdate 在所有 Update 之后执行，所以这里写进去的位置才作数。
     void LateUpdate()
     {
-        if (!placed || !drawer || !fragment) return;
+        if (!drawer) return;
+        if (pulled) drawer.position = pulledAt;
+
+        if (!placed || !fragment) return;
         if (!fragment.activeSelf) return;
         fragment.transform.position = drawer.position + fragmentOffset;
     }
@@ -341,11 +395,119 @@ public sealed class DrawerFragmentReveal : MonoBehaviour
         return magnitude > .02f && magnitude < 1f;
     }
 
-    // 抽屉只能沿“垂直于面板”的方向抽出。面板几乎与家具外框齐平，而抽屉的背面离外框很远，
-    // 所以：在几个候选水平轴里，比较“桌体外表面 - 抽屉外表面”的间距，间距最小的那一侧就是正面。
+    /// <summary>
+    /// 抽屉该往哪一面拉出去。
+    ///
+    /// 只认一条物理事实：**抽屉绝不会沿着柜体的长轴滑出去**。
+    /// 床下柜是 1.44m 长、0.62m 深，三个抽屉沿长轴并排，进深方向只有垂直于长轴的那一根轴。
+    /// 以前按“四面里哪面最空”选，柜体端头外面也是空的（1.2m 全通），长轴就会被选进来，
+    /// 抽屉于是横着滑出去 —— 就是玩家看到的“左右推”。
+    ///
+    /// 现在：先取柜体长轴，再取它的水平垂线当进深轴；正负用“哪一侧抽屉面板与柜体正面齐平”
+    /// 定（抽屉面板一定与柜体正面齐平，背面缩在柜体里 0.24m）。
+    /// </summary>
     Vector3 ResolveOpenDirection(Transform d)
     {
         Bounds drawerBounds = BoundsOf(d);
+        Transform furniture = ResolveFurnitureRoot(d);
+        Bounds cabinet = furniture ? BoundsOf(furniture) : drawerBounds;
+
+        // 柜体长轴 = 水平方向上更长的那条边；它的垂线才是抽屉的进深方向。
+        Vector3 longAxis = cabinet.size.x >= cabinet.size.z ? Vector3.right : Vector3.forward;
+        Vector3 axis = Vector3.Cross(Vector3.up, longAxis).normalized;
+
+        Vector3 dir;
+        float frontGap, backGap;
+        if (TryPickSide(cabinet, drawerBounds, axis, out dir, out frontGap, out backGap))
+        {
+            Debug.Log("[抽屉] " + PathOf(d) + " 柜体长轴 " + AxisName(longAxis)
+                + "，进深轴 " + AxisName(axis)
+                + "；面板间距 正 " + frontGap.ToString("F3") + " / 背 " + backGap.ToString("F3")
+                + " -> 拉出方向 " + AxisName(dir), this);
+            return dir;
+        }
+
+        // 齐平关系读不出来（整只抽屉被床架包住等）：退到进深轴两侧的通空度，
+        // 只在两根轴上比，长轴已经被排除，不可能再横向滑。
+        float pos = FaceClearance(drawerBounds, axis, d);
+        float neg = FaceClearance(drawerBounds, -axis, d);
+        Vector3 byClearance = pos >= neg ? axis : -axis;
+        Debug.LogWarning("[抽屉] 面板间距不可信（正 " + frontGap.ToString("F3") + " / 背 "
+            + backGap.ToString("F3") + "），改用进深轴通空度 +" + pos.ToString("F2")
+            + " / -" + neg.ToString("F2") + " -> " + AxisName(byClearance), this);
+        return byClearance;
+    }
+
+    /// <summary>抽屉正面是否已经跑到柜体正面之外（= 真的拉出来了）。</summary>
+    static bool GotOutside(Transform drawer, Vector3 dir)
+    {
+        Transform furniture = ResolveFurnitureRoot(drawer);
+        if (!furniture) return true;
+        return MaxAlong(BoundsOf(drawer), dir) - MaxAlong(BoundsOf(furniture), dir) > .12f;
+    }
+
+    /// <summary>
+    /// 抽屉某个侧面朝外有多“空”：在该面外侧铺 3×3 个采样点各打一条射线，取最小距离。
+    /// 返回 max 表示这一面完全通向房间。
+    /// </summary>
+    static float FaceClearance(Bounds b, Vector3 dir, Transform self)
+    {
+        const float max = 1.2f;
+        Vector3 face = b.center + dir * Mathf.Abs(Vector3.Dot(b.extents, dir));
+        Vector3 up = Vector3.up;
+        Vector3 side = Vector3.Cross(up, dir).normalized;
+        float halfUp = Mathf.Abs(Vector3.Dot(b.extents, up)) * .55f;
+        float halfSide = Mathf.Abs(Vector3.Dot(b.extents, side)) * .55f;
+
+        float min = max;
+        for (int i = -1; i <= 1; i++)
+        {
+            for (int j = -1; j <= 1; j++)
+            {
+                Vector3 origin = face + up * (halfUp * i) + side * (halfSide * j) + dir * .05f;
+                float blocked = max;
+                foreach (var hit in Physics.RaycastAll(origin, dir, max, ~0, QueryTriggerInteraction.Ignore))
+                {
+                    if (!hit.collider) continue;
+                    var t = hit.collider.transform;
+                    if (t == self || t.IsChildOf(self)) continue;        // 抽屉自己不算
+                    if (hit.distance > .02f && hit.distance < blocked) blocked = hit.distance;
+                }
+                // 射线从碰撞体内部出发时打不到那个碰撞体（Unity 不打“出射”），
+                // 所以再在面前 12cm 处探一次体积：有别的碰撞体压在那儿，就当这面被挡住。
+                if (blocked >= max && BlockedByVolume(origin + dir * .07f, self)) blocked = .05f;
+                if (blocked < min) min = blocked;
+            }
+        }
+        return min;
+    }
+
+    static readonly Collider[] overlapBuffer = new Collider[8];
+
+    static bool BlockedByVolume(Vector3 point, Transform self)
+    {
+        int count = Physics.OverlapBoxNonAlloc(point, Vector3.one * .06f, overlapBuffer,
+            Quaternion.identity, ~0, QueryTriggerInteraction.Ignore);
+        for (int i = 0; i < count; i++)
+        {
+            var c = overlapBuffer[i];
+            if (!c) continue;
+            var t = c.transform;
+            if (t == self || t.IsChildOf(self)) continue;
+            return true;
+        }
+        return false;
+    }
+
+    static string AxisName(Vector3 d)
+    {
+        if (Mathf.Abs(d.x) > .5f) return d.x > 0f ? "+X" : "-X";
+        return d.z > 0f ? "+Z" : "-Z";
+    }
+
+    /// <summary>兜底：按“哪侧与家具外框齐平”判正面（书桌这类进深和柜体接近的家具仍然好用）。</summary>
+    Vector3 ResolveOpenDirectionGeometric(Transform d, Bounds drawerBounds)
+    {
         Transform furniture = ResolveFurnitureRoot(d);
 
         if (furniture)
@@ -381,7 +543,11 @@ public sealed class DrawerFragmentReveal : MonoBehaviour
                 + "，候选方向 " + best.ToString("F2"), this);
 
             // 正面间距小、背面间距大，才算可信。
-            if (best.sqrMagnitude > .5f && bestGap < .12f && bestBack > bestGap + .03f) return best;
+            // 注意：这里只定“沿哪根轴”和正负，不再叠加通空度校正 ——
+            // FurnitureOpenable.PickOutwardByClearance 的选轴逻辑（PanelAxis）用的也是
+            // “两侧通空度差”，在床下柜上同样会把长轴当成进深轴，叠在这里只会互相打架。
+            if (best.sqrMagnitude > .5f && bestGap < .12f && bestBack > bestGap + .03f)
+                return best;
         }
 
         // 兜底：沿用句柄上已配置的滑动轴（只取轴不算符号，符号朝玩家）。
