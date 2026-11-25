@@ -50,14 +50,18 @@ public sealed class Level2Doors : MonoBehaviour
         return false;
     }
 
-    /// <summary>谜题一完成：放行、并自己把门推开一条路。</summary>
+    /// <summary>
+    /// 谜题一完成：只把出口门解锁，不替玩家推门。
+    /// 以前这里顺手 PushOpen 了一下，玩家补完全家福回头就看见门自己敞着，
+    /// 像是场景里本来就开着 —— 现在门保持关着，等玩家自己走过去按 E。
+    /// </summary>
     public void OpenExit()
     {
         foreach (var d in doors)
         {
             if (!d.locked) continue;
             d.locked = false;
-            d.PushOpen();
+            Debug.Log($"[第二关] 出口门已解锁 {d.Key}（等玩家自己推开）");
         }
     }
 

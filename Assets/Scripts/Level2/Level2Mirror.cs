@@ -578,30 +578,30 @@ public sealed class Level2Mirror : MonoBehaviour
     public void Talk()
     {
         // 提示页还挂在屏幕上时不要再触发：否则连着按 E 会把同一段台词 / 问答页重复排进队列，
-        // 表现为“看完又被问一遍”。放在最前面，未解锁那两页同样受保护。
+        // 表现为“看完又被问一遍”。
         if (Ui && Ui.IsPageOnScreen) return;
 
-        if (!unlocked)
+        // 这句话已经说过了：不重复问答，只提醒玩家旁边桌上那个盒子（顺便兜底把盒子打开）。
+        if (saidSomething)
         {
-            // 已经说过心里话就不再重复弹页，安安静静让玩家走开。
-            if (saidSomething) return;
-            // 还没轮到这里的正事，先让玩家认出镜子里的自己 —— 两句独白，接着说说心里话。
-            Ui?.Say("内心独白", "这就是小时候的自己吗？");
-            Ui?.Say("内心独白", "原来小时候的我这么可爱、这么热爱生活。");
-            AskSelfWord();
+            if (box && !box.IsPopped) box.Open();
+            Ui?.Note("镜子", letterOpened
+                ? "镜子里的人看着我，没有说话。"
+                : "话我已经说过了。旁边桌上那个小木箱，还开着。");
             return;
         }
 
+        // 上一次问答被打断（页面被清掉之类）：不重播独白，直接把问题再问一遍。
         if (talked)
         {
             if (!answered) Ask();
-            else Ui?.Note("镜子", "镜子里的人看着我，没有说话。桌上的盒子还开着。");
             return;
         }
-        talked = true;
 
-        // 已经在镜子前说过心里话的，就不再重复那段独白，直接进正式问答。
-        if (!saidSomething) Ui?.Say("内心独白", "原来我一直在和过去的自己对视。");
+        talked = true;
+        // 先认出镜子里的自己，再说想对她说的话 —— 只有这一套开场，不再按解锁状态分岔。
+        Ui?.Say("内心独白", "这就是小时候的自己吗？");
+        Ui?.Say("内心独白", "原来小时候的我这么可爱、这么热爱生活。");
         // 直接入队排在独白后面，不靠 Invoke 定时（Invoke 一旦碰上组件被禁用 / 暂停就会静默丢掉，
         // 表现就是“独白看完、问答没出来”）。队列本身保证顺序，所以这里同步调用是安全的。
         Ask();
@@ -614,42 +614,24 @@ public sealed class Level2Mirror : MonoBehaviour
         Ui?.Ask("镜子", "你现在开心吗，有什么想对此时小时候的你说？", SelfWords, OnAnswer);
     }
 
-    /// <summary>
-    /// 还没解锁谜题三时，镜子前也先问一句“想对小时候的自己说什么”。
-    /// 只是说心里话，不推进任何进度 —— 所以用 saidSomething 记，不碰 answered。
-    /// </summary>
-    void AskSelfWord()
-    {
-        if (saidSomething) return;
-        Debug.Log("[谜题三] 弹出“想对小时候的我说”问答页（两选一）");
-        Ui?.Ask("镜子", "你现在开心吗，有什么想对此时小时候的你说？", SelfWords, OnSelfWord);
-    }
-
-    void OnSelfWord(int index)
-    {
-        if (saidSomething) return;
-        saidSomething = true;
-        Debug.Log($"[谜题三] 镜子前说的话：选项 {index + 1}");
-
-        // 选哪一句都走同一段：镜子不评判对错，只把话题交回给玩家自己。
-        Ui?.Say("镜子里", "其实不管你如何选择，你都会找到你想要的东西的！");
-        Ui?.Say("小木箱", "请往旁边的桌子上看看，那儿有个小木箱，里面可能有你想要的。");
-    }
-
     public void Answer(int index) => OnAnswer(index);
 
+    /// <summary>
+    /// 镜子前只问这一次。答完立刻做两件事：① 把桌上盒子真的弹开；② 提示去看它。
+    /// 顺序不能反 —— 以前是“先提示、盒子却没开”，玩家走过去按 E 只得到“现在还打不开”。
+    /// </summary>
     void OnAnswer(int index)
     {
         if (answered) return;
         answered = true;
-        Debug.Log("[谜题三] 玩家回答：" + index);
+        saidSomething = true;
+        Debug.Log($"[谜题三] 玩家回答：选项 {index + 1}");
 
-        Ui?.Say("镜子里", index == 0
-            ? "镜子里的孩子没有哭。她只是安静地看着我，像在确认我有没有骗她。"
-            : "镜子里的孩子笑了一下。那个笑我很熟悉 —— 我很久没有这样笑过了。");
-        Ui?.Note("桌上的盒子", "旁边桌上那个盒子，自己弹开了一条缝。");
+        if (box) box.Open();          // 先开，再指给玩家看
 
-        if (box) box.Open();
+        // 选哪一句都走同一段：镜子不评判对错，只把话题交回给玩家自己。
+        Ui?.Say("镜子里", "其实不管你如何选择，你都会找到你想要的东西的！");
+        Ui?.Say("小木箱", "请往旁边的桌子上看看，那儿有个小木箱，里面可能有你想要的。");
     }
 
     // ---------------- 信 ----------------
@@ -663,11 +645,31 @@ public sealed class Level2Mirror : MonoBehaviour
         // 信出现的那一刻，镜子里的人长大了。
         ShowAdult();
 
-        Ui?.Letter("给小时候的我",
-            "恭喜通过。\n\n" +
-            "这封信不是小时候写给未来的，\n" +
-            "是现在的我，写给那时候的你。\n\n" +
-            "—— 长大后的你",
+        // 信是“小时候的我”写给“长大以后的我”的 —— 和序幕里那句「写给长大以后的我。
+        // 十年之后，我才敢拆开它。」是同一封信，所以抬头、落款都按那时的小孩来写。
+        // 正文一行一句，靠换行控制节奏；UI 那边会一个字一个字写出来（配钢笔书写声）。
+        Ui?.Letter("写给长大以后的我",
+            "你好呀，长大以后的我。\n" +
+            "\n" +
+            "我今年还很小，字写得歪歪的，\n" +
+            "但还是想把这件事写下来。\n" +
+            "\n" +
+            "我们的房间现在是这样的：\n" +
+            "相框挂在墙上，玩偶排好队，\n" +
+            "吉他靠在积木旁边。\n" +
+            "\n" +
+            "妈妈说，人长大了会忘记很多事。\n" +
+            "那我就先替你记着——\n" +
+            "\n" +
+            "要一直期待呀。\n" +
+            "期待生日，期待朋友，\n" +
+            "期待自己长成一个很好的人。\n" +
+            "\n" +
+            "要是哪天你走累了，\n" +
+            "就回来看看这间屋子，看看这封信。\n" +
+            "我一直在这里，等你。\n" +
+            "\n" +
+            "—— 小时候的我",
             OnLetterClosed);
     }
 
@@ -701,11 +703,34 @@ public sealed class Level2Mirror : MonoBehaviour
         foreach (var l in FindObjectsOfType<L2Flicker>()) l.gameObject.SetActive(false);
 
         // 黑幕白字：一个字一个字打出来，全部出完后才允许按空格。
+        // 结算分四屏：先说这封信，再把“同行”的两种读法各给一屏，最后落回家本身。
+        // 只有最后一屏挂 OnEndingDone，前面几屏按空格照常往后翻。
         Ui?.Ending("主角内心独白", new[]
         {
             "原来当年的信，不是用来等待一个完美的未来。",
             "它是留给我的一场重逢，",
             "让长大的我，终于可以好好回应那个满怀期待的小孩。",
+        }, null);
+
+        Ui?.Ending("同行 · xíng", new[]
+        {
+            "我们没能一起长大，却在同一条路上遇见了彼此。",
+            "她走她的，我走我的，",
+            "只是这一段，我们并着肩。",
+        }, null);
+
+        Ui?.Ending("同行 · háng", new[]
+        {
+            "原来“同行”还有另一种读法。",
+            "同一条路，是同行；同一件放不下的事，也是同行。",
+            "我和她，两样都算。",
+        }, null);
+
+        Ui?.Ending("这一次", new[]
+        {
+            "照片上的折痕还在，颜色也没有回来。",
+            "但我把它挂回去了 ——",
+            "连同那个一直站在原地的我。",
         }, OnEndingDone);
     }
 
@@ -733,14 +758,18 @@ public sealed class Level2Mirror : MonoBehaviour
 
     // ---------------- 存档 ----------------
 
-    /// <summary>0 未解锁 / 1 已解锁 / 2 已答完 / 3 已读信 / 4 已看完结局。</summary>
+    /// <summary>
+    /// 0 未解锁 / 1 已解锁 / 2 已答完 / 3 已读信 / 4 已看完结局。
+    /// 未解锁时即使答过话也只算 0 —— 否则读档会把 unlocked 一起写回去，
+    /// 玩家就能在一楼直接把结局读完、跳过玩偶和吉他。
+    /// </summary>
     public int Stage
     {
         get
         {
             if (finished) return 4;
             if (letterOpened) return 3;
-            if (answered) return 2;
+            if (answered && unlocked) return 2;
             if (unlocked) return 1;
             return 0;
         }
@@ -754,6 +783,7 @@ public sealed class Level2Mirror : MonoBehaviour
         {
             talked = true;
             answered = true;
+            saidSomething = true;          // 答过就等于说过，别再问一遍
             if (box) box.Open();
         }
         if (stage >= 3)
@@ -777,8 +807,8 @@ public sealed class Level2MirrorTalk : L2Interactable
         get
         {
             if (!host) return "";
-            if (!host.Unlocked) return host.SaidSomething ? "" : "E 看看镜子";
-            if (host.Answered) return "E 再看一眼镜子";
+            // 说过话之后也保留提示：按 E 会给一句“盒子还开着”的提醒，不再是按了没反应。
+            if (host.Answered || host.SaidSomething) return "E 再看一眼镜子";
             return "E 站到镜子前";
         }
     }
@@ -825,11 +855,21 @@ public sealed class Level2LetterBox : L2Interactable
     {
         if (!popped)
         {
-            // 玩家被引导过来看盒子，但谜题三还没到时候开 —— 别按了 E 毫无反应。
-            Level2Ui.Instance?.Note("小木箱", "盒盖扣得很紧，现在还打不开。");
+            // 盒子要等镜子前那句话说完才弹开，别按了 E 毫无反应。
+            Level2Ui.Instance?.Note("小木箱", "盒盖扣得很紧 —— 先站到那面镜子前，把想说的话说完。");
             return;
         }
         if (read) return;
+
+        // 谜题二还没做完就先把盒子翻开了：里面是一张空白信纸，不给结局，
+        // 否则玩家能从一楼直接跳到通关，玩偶和吉他整段被跳过。
+        if (host && !host.Unlocked)
+        {
+            Debug.Log("[谜题三] 谜题二未完成，盒子只给空信纸");
+            Level2Ui.Instance?.Note("小木箱", "盒子里只有一张对折的空白信纸。\n先把玩偶和吉他放回原处，再来读它。");
+            return;
+        }
+
         read = true;
         host?.OnBoxOpened();
     }

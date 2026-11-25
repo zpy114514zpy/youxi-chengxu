@@ -22,8 +22,8 @@ public sealed class GameAudio : MonoBehaviour
     /// <summary>走多远算一步（米）。走速 2 m/s 时约 2.2 步/秒，接近正常步频。</summary>
     public const float StepLength = .90f;
 
-    AudioSource bgm, sfx, steps, push, page, world;
-    AudioClip bgmClip, itemClip, stepClip, pushClip, pageClip, doorClip, lampClip, portalClip;
+    AudioSource bgm, sfx, steps, push, page, world, pen;
+    AudioClip bgmClip, itemClip, stepClip, pushClip, pageClip, doorClip, lampClip, portalClip, penClip;
     float lastPageAt = -1f;
     bool pushing;
     bool walkingState;
@@ -76,6 +76,9 @@ public sealed class GameAudio : MonoBehaviour
         page = Make("提示翻页音效", null, .9f, false);
         // 开门 / 开灯：再单独一条，和拾取、翻页都不互相干扰。
         world = Make("环境互动音效", null, 1f, false);
+        // 信纸上的钢笔书写：没有现成采样，运行时合成一小段“笔尖蹭纸”，一个字响一下。
+        penClip = BuildPenScratch();
+        pen = Make("书写音效", null, .9f, false);
 
         SceneManager.sceneLoaded += OnSceneLoaded;
         EnsureListener();
@@ -169,6 +172,46 @@ public sealed class GameAudio : MonoBehaviour
         a.page.pitch = 1f;
         // 玩家要求“小一点”：提示音压到 0.55，连点翻页也不刺耳。
         a.page.PlayOneShot(a.pageClip, .55f);
+    }
+
+    /// <summary>
+    /// 信纸上的钢笔书写：每写出一个字响一下。
+    /// 没有现成采样，就在运行时合成一小段“笔尖蹭纸”，音高 / 音量都随机一点，
+    /// 一秒近二十个字连着响，也不会听成“哒哒哒”的机械节拍。
+    /// </summary>
+    public static void PlayPen()
+    {
+        var a = Instance;
+        if (!a || !a.pen || !a.penClip) return;
+        a.pen.pitch = Random.Range(.85f, 1.18f);
+        a.pen.PlayOneShot(a.penClip, Random.Range(.45f, .75f));
+    }
+
+    /// <summary>
+    /// 合成“钢笔在纸上写一笔”：白噪声过两级低通（压掉刺耳的嘶声，留下纸纤维的闷响），
+    /// 配一个快起慢收的包络，再叠 63Hz 的颗粒起伏，像笔尖一路蹭过去。
+    /// </summary>
+    static AudioClip BuildPenScratch()
+    {
+        const int sr = 44100;
+        int n = Mathf.RoundToInt(sr * .07f);
+        var data = new float[n];
+        var rnd = new System.Random(20261125);
+        float lp1 = 0f, lp2 = 0f;
+        for (int i = 0; i < n; i++)
+        {
+            float t = (float)i / (n - 1);
+            // 起手快、收尾慢：笔尖落下那一下实，抬起来时轻
+            float env = Mathf.Pow(Mathf.Sin(Mathf.PI * Mathf.Pow(t, .75f)), .8f) * Mathf.Lerp(1f, .35f, t);
+            float white = (float)(rnd.NextDouble() * 2.0 - 1.0);
+            lp1 += (white - lp1) * .55f;
+            lp2 += (lp1 - lp2) * .30f;
+            float grain = .80f + .20f * Mathf.Sin(t * Mathf.PI * 2f * 63f);
+            data[i] = Mathf.Clamp(lp2 * env * grain * 1.6f, -1f, 1f);
+        }
+        var clip = AudioClip.Create("钢笔书写", n, 1, sr, false);
+        clip.SetData(data, 0);
+        return clip;
     }
 
     /// <summary>

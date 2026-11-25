@@ -29,6 +29,11 @@ public sealed class Level2Ui : MonoBehaviour
     const float CharDelay = .075f;    // 每个字之间的间隔
     const float LinePause = .55f;     // 一句话打完，停一下再打下一句
 
+    // 信纸：钢笔一个字一个字写出来（配笔尖摩擦声），比黑幕打字慢一点，像真的在写
+    const float LetterCharDelay = .045f;
+    const float LetterLinePause = .22f;   // 换行时笔尖抬起来挪一下
+    const float LetterDotPause = .14f;    // 句号、问号后面顿一下
+
     readonly Queue<Page> queue = new Queue<Page>();
     Page current;
     // 左下角“上一步”用的历史：每页看完都记下来，回看时只换“显示哪一页”，
@@ -39,11 +44,20 @@ public sealed class Level2Ui : MonoBehaviour
     bool pendingBack;
     Texture2D pillOn, pillHover, pillOff;
     Font font;
+    /// <summary>信纸用的钢笔手写体（Resources/Fonts/LongCang.ttf）。找不到就退回系统字体，不至于没字。</summary>
+    Font penFont;
     Texture2D white, letterPaper, adultFigure;
     // 第一关那套“石板 + 金边”提示框贴图，第二关的提示框直接沿用，保持两关观感一致。
     Texture2D panelTex;
     float shownAt, charTimer;
     int typedLine, typedCount;
+    // 信纸的书写进度：整封信连续数，遇到换行/句号才停一下
+    int letterChars;
+    float letterTimer;
+    // 信纸正文字号自适应的缓存（换了信或换了分辨率才重算）
+    string letterFitBody;
+    float letterFitWidth;
+    int letterFitSize;
     bool blockerSet, mouseFreed;
 
     /// <summary>屏幕上看得到的那一页：回看时是历史页，否则是正常推进到的那一页。</summary>
@@ -59,6 +73,13 @@ public sealed class Level2Ui : MonoBehaviour
     {
         Instance = this;
         font = Font.CreateDynamicFontFromOSFont(new[] { "Microsoft YaHei", "SimHei", "Arial" }, 26);
+        // 信纸上的字要像钢笔写的：Long Cang（龙藏）细笔画手写体，开源 OFL，可随游戏分发。
+        penFont = Resources.Load<Font>("Fonts/LongCang");
+        if (!penFont)
+        {
+            Debug.LogWarning("[第二关UI] 找不到钢笔字体 Resources/Fonts/LongCang，信纸退回系统字体");
+            penFont = font;
+        }
         white = L2.SolidTexture(Color.white);
         // 第一关“提示”那一页用的就是这张：左上角挂锁 + 铜边 + 深石板，右下角一个 ▶。
         panelTex = Resources.Load<Texture2D>("StoryUI/guide-clean");
@@ -109,15 +130,35 @@ public sealed class Level2Ui : MonoBehaviour
         charTimer = .35f;          // 黑幕先黑一下，再开始出字（这里存的是“还要等多久”，不是绝对时间）
         typedLine = 0;
         typedCount = 0;
+        letterChars = 0;
+        letterTimer = .55f;        // 信纸先摊开、让人看清纸，再落笔
         RefreshBlocker();
         // 问答页单独记一行：排查“问答没出现”时，看得见它到底有没有轮到显示。
         if (page.kind == Kind.Ask)
             Debug.Log($"[第二关UI] 问答页已显示：{page.title}（{page.options?.Length ?? 0} 个选项）");
     }
 
-    /// <summary>最后一句是不是已经一个字一个字打完了。</summary>
-    bool AllTyped => current == null || current.kind != Kind.Ending || current.lines == null
-                     || typedLine >= current.lines.Length;
+    /// <summary>最后一句 / 最后一个字是不是已经写完了。</summary>
+    bool AllTyped
+    {
+        get
+        {
+            if (current == null) return true;
+            if (current.kind == Kind.Ending)
+                return current.lines == null || typedLine >= current.lines.Length;
+            if (current.kind == Kind.Letter)
+                return string.IsNullOrEmpty(current.body) || letterChars >= current.body.Length;
+            return true;
+        }
+    }
+
+    /// <summary>字还没打完时按空格：直接把整页补全（不是跳过），再按一次才翻页。</summary>
+    void FinishTyping()
+    {
+        if (current == null) return;
+        if (current.kind == Kind.Ending && current.lines != null) { typedLine = current.lines.Length; typedCount = 0; }
+        else if (current.kind == Kind.Letter && current.body != null) letterChars = current.body.Length;
+    }
 
     void Advance()
     {
@@ -169,8 +210,8 @@ public sealed class Level2Ui : MonoBehaviour
         if (reviewing != null) { StepForward(); return; }
         if (current == null) return;
         if (current.kind == Kind.Ask) return;
-        if (current.kind == Kind.Ending && !AllTyped) { typedLine = current.lines.Length; typedCount = 0; }
-        else Advance();
+        if (!AllTyped) { FinishTyping(); return; }
+        Advance();
     }
 
     public bool IsAsk => current != null && current.kind == Kind.Ask;
@@ -199,6 +240,7 @@ public sealed class Level2Ui : MonoBehaviour
             return;
         }
 
+        // 黑幕：一句一句浮出来
         if (current.kind == Kind.Ending && current.lines != null && typedLine < current.lines.Length)
         {
             charTimer -= Time.unscaledDeltaTime;
@@ -209,6 +251,22 @@ public sealed class Level2Ui : MonoBehaviour
                 else if (typedLine < current.lines.Length - 1)                             // 这句完了，停一下
                 { typedLine++; typedCount = 0; charTimer = LinePause; }
                 else { typedLine = current.lines.Length; typedCount = 0; }                 // 全部打完
+            }
+        }
+
+        // 信纸：钢笔一个字一个字写。每落一笔响一下笔尖摩擦声，标点/换行处停手。
+        if (current.kind == Kind.Letter && !string.IsNullOrEmpty(current.body) && letterChars < current.body.Length)
+        {
+            letterTimer -= Time.unscaledDeltaTime;
+            if (letterTimer <= 0f)
+            {
+                char c = current.body[letterChars];
+                letterChars++;
+                if (c == '\n') letterTimer = LetterLinePause;
+                else if (c == '。' || c == '？' || c == '！' || c == '—') letterTimer = LetterDotPause;
+                else if (c == '，' || c == '、' || c == '：' || c == '；') letterTimer = LetterCharDelay * 2f;
+                else letterTimer = LetterCharDelay;
+                if (c != '\n' && c != ' ' && c != '\r') GameAudio.PlayPen();    // 写字的声音
             }
         }
 
@@ -230,7 +288,7 @@ public sealed class Level2Ui : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.Space))
         {
-            if (!AllTyped) return;                                                 // 字没打完不给跳
+            if (!AllTyped) { FinishTyping(); return; }                             // 字没打完先补全，别一下就合上
             GameAudio.PlayPage();                                                  // 提示翻页音
             Advance();
         }
@@ -508,24 +566,74 @@ public sealed class Level2Ui : MonoBehaviour
         DrawBottomRow(f);
     }
 
+    // 信纸上的字：钢笔手写体 + 深墨色，比正文更“墨”一点，压在米黄纸上才不飘。
+    static readonly Color InkColor = new Color(.13f, .09f, .06f);
+
+    /// <summary>钢笔手写体样式（信纸专用）。字体没载入时自动退回系统字体，不会画不出字。</summary>
+    GUIStyle PenStyle(int size, TextAnchor anchor, Color color)
+    {
+        var st = new GUIStyle(GUI.skin.label)
+        { font = penFont ? penFont : font, fontSize = size, alignment = anchor, wordWrap = true };
+        st.normal.textColor = color;
+        st.hover.textColor = color;
+        st.active.textColor = color;
+        st.focused.textColor = color;
+        st.onNormal.textColor = color;
+        return st;
+    }
+
     void DrawLetter(Page p)
     {
         Fill(new Rect(0, 0, Screen.width, Screen.height), new Color(0f, 0f, 0f, .82f));
 
-        float h = Mathf.Min(Screen.height * .82f, 760f);
+        float h = Mathf.Min(Screen.height * .86f, 880f);
         float w = h * .74f;
         var r = new Rect((Screen.width - w) * .5f, (Screen.height - h) * .5f, w, h);
 
         if (letterPaper) GUI.DrawTexture(r, letterPaper, ScaleMode.ScaleAndCrop, true);
         else Fill(r, new Color(.94f, .90f, .80f, 1f));
 
-        float pad = w * .10f;
-        GUI.Label(new Rect(r.x + pad, r.y + h * .16f, w - pad * 2f, 60f),
-            p.title ?? "", Style(Mathf.RoundToInt(h * .052f), TextAnchor.MiddleCenter, new Color(.17f, .12f, .09f)));
-        GUI.Label(new Rect(r.x + pad, r.y + h * .30f, w - pad * 2f, h * .44f),
-            p.body ?? "", Style(Mathf.RoundToInt(h * .042f), TextAnchor.UpperCenter, new Color(.11f, .08f, .06f)));
-        // 信纸底色是浅的，按钮走“无底色 + 深色字”，不然白字压在白纸上看不见。
-        DrawBottomRowOnPaper(new Rect(r.x + pad, r.y + h * .82f - 6f, w - pad * 2f, Mathf.Clamp(h * .05f, 32f, 40f)), 1f);
+        float pad = w * .105f;
+        float bodyW = w - pad * 2f;
+
+        // 抬头：也是钢笔字，比正文大一号
+        int titleSize = Mathf.RoundToInt(h * .048f);
+        GUI.Label(new Rect(r.x + pad, r.y + h * .105f, bodyW, titleSize * 1.6f),
+            p.title ?? "", PenStyle(titleSize, TextAnchor.MiddleCenter, InkColor));
+
+        // 正文：从抬头下面一直写到页脚上面。字号先按信纸高度取一个基准，
+        // 再用 CalcHeight 真量——装不下就一号一号往下收，保证整封信落在纸上、不写穿底边。
+        float bodyTop = r.y + h * .205f;
+        float bodyH = r.y + h * .815f - bodyTop;
+        string full = p.body ?? "";
+        bool instant = reviewing != null;                        // 回看时整封直接给全，不用再等一遍书写
+        int shown = instant ? full.Length : Mathf.Min(letterChars, full.Length);
+
+        int size;
+        // 字号自适应只在换信 / 换分辨率时算一次：OnGUI 一帧会进来好几次，每次几十遍 CalcHeight 太浪费。
+        if (letterFitBody != full || !Mathf.Approximately(letterFitWidth, bodyW) || letterFitSize <= 0)
+        {
+            size = Mathf.RoundToInt(h * .040f);
+            var probe = PenStyle(size, TextAnchor.UpperCenter, InkColor);
+            while (size > 10 && probe.CalcHeight(new GUIContent(full), bodyW) > bodyH)
+            {
+                size -= 1;
+                probe = PenStyle(size, TextAnchor.UpperCenter, InkColor);
+            }
+            letterFitSize = size;
+            letterFitBody = full;
+            letterFitWidth = bodyW;
+            // 一次性把整封信要用的字形烘进字体图集，别跟着“一个字一个字写”反复重建贴图（会一顿一顿的）。
+            if (penFont) penFont.RequestCharactersInTexture(full, size, FontStyle.Normal);
+        }
+        size = letterFitSize;
+        var st = PenStyle(size, TextAnchor.UpperCenter, InkColor);
+        // 只画“已经写出来的那几个字”：字从上往下长，写完的段落不会重排。
+        GUI.Label(new Rect(r.x + pad, bodyTop, bodyW, bodyH), full.Substring(0, shown), st);
+
+        float rowH = Mathf.Clamp(h * .05f, 32f, 40f);
+        DrawBottomRowOnPaper(new Rect(r.x + pad, r.y + h * .845f, bodyW, rowH), 1f,
+            instant ? "空格返回" : (AllTyped ? "空格合上" : "空格跳过书写"));
     }
 
     void DrawEnding(Page p, bool instant)
@@ -584,7 +692,7 @@ public sealed class Level2Ui : MonoBehaviour
     }
 
     /// <summary>信纸页的底部一行：纸是浅色的，用深棕字，不要白底药丸。</summary>
-    void DrawBottomRowOnPaper(Rect row, float sc)
+    void DrawBottomRowOnPaper(Rect row, float sc, string hintOverride = null)
     {
         float pillH = Mathf.Min(row.height, Mathf.Round(34f * sc));
         float pillW = Mathf.Min(Mathf.Round(150f * sc), row.width * .34f);
@@ -593,7 +701,7 @@ public sealed class Level2Ui : MonoBehaviour
 
         if (BackButton(backRect, hintSize, backSteps.Count > 0, true)) pendingBack = true;
 
-        string hint = reviewing != null ? "空格返回" : "空格合上";
+        string hint = hintOverride ?? (reviewing != null ? "空格返回" : "空格合上");
         GUI.Label(new Rect(row.x + pillW + 8f, row.y, row.width - pillW - 8f, row.height),
             hint, Style(hintSize, TextAnchor.MiddleRight, new Color(.34f, .26f, .18f, .85f)));
     }
