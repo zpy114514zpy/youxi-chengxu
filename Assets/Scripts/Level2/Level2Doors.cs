@@ -1,16 +1,13 @@
 using System.Collections.Generic;
-using System.Collections;
 using UnityEngine;
 
 /// <summary>
 /// 第二关的房门。
 /// 场景里那些 BP_Door_Inside_* 在第一关是挂 InteractiveDoor 的，第二关没有，
 /// 结果门板连碰撞带网面杵在门框里、按 E 毫无反应 —— 玩家会被关死在二号房。
-/// 这里给每扇内门补一个最朴素的开关：按 E 推开，门板绕合页转 92°，门洞就通了。
+/// 这里给每扇内门补一个最朴素的开关：按 E 开 / 关，门板绕合页转 92°，门洞就通了。
+/// 开门的方向按玩家站的位置现算（永远往远离玩家的那一侧转），关门沿原路转回去。
 /// 出去外面那扇（A3，正对出生点）要等谜题一修补完全家福才放行。
-///
-/// 推的方向按玩家站的位置现算：门板永远往“远离玩家的那一侧”转，
-/// 所以站在门外按 E 是往里推、站在门里按 E 是往外推 —— 一号小房间那扇门也就不会再“拉”开。
 /// </summary>
 public sealed class Level2Doors : MonoBehaviour
 {
@@ -86,14 +83,25 @@ public sealed class Level2Doors : MonoBehaviour
     }
 }
 
-/// <summary>一扇能推开的门。组件挂在门板根节点上，射线打到门板的 MeshCollider 就能找到它。</summary>
+/// <summary>
+/// 一扇能开、也能关的门。组件挂在门板根节点上，射线打到门板的 MeshCollider 就能找到它。
+/// 开的方向按玩家站的位置现算（往远离玩家的那一侧转），关门就沿原路转回去；
+/// 开 / 关各响一声，用的就是第一关那套门声（GameAudio.PlayDoor）。
+/// </summary>
 public sealed class Level2Door : L2Interactable
 {
     public Transform leaf;
     public bool locked;
     public string lockedHint = "这扇门还打不开。先把墙上那幅全家福补起来吧。";
 
+    const float OpenAngle = 92f;
+    const float SwingSpeed = 300f;        // 度/秒，和第一关的门手感接近
+
+    Quaternion baseRot = Quaternion.identity;   // 关上时门板的本地旋转
+    bool hasBase;
+    float angle, target, sign = 1f;
     bool open;
+
     public bool Open => open;
     public string Key => leaf ? leaf.name : name;
 
@@ -101,39 +109,73 @@ public sealed class Level2Door : L2Interactable
     {
         get
         {
-            if (open) return "";                                  // 开着就不再提示，门保持敞开
+            if (open) return "E 关上门";
             return locked ? "E 这扇门还打不开" : "E 推开房门";
         }
     }
 
+    void Awake() => EnsureBase();
+
+    void EnsureBase()
+    {
+        if (hasBase || !leaf) return;
+        baseRot = leaf.localRotation;          // AddComponent 时门还关着，这时记下来的就是“关”的姿态
+        hasBase = true;
+    }
+
     public override void Interact(PlayerInventory inventory)
     {
-        if (open) return;
-        if (locked)
+        if (!open && locked)
         {
             Level2Director.Instance?.Ui?.Say("房门", lockedHint);
             return;
         }
         var player = Level2Director.Instance ? Level2Director.Instance.Player : null;
-        PushOpen(player ? player.position : (Vector3?)null);
+        Toggle(player ? player.position : (Vector3?)null);
     }
 
-    public void PushOpen() => PushOpen(null);
-
-    public void PushOpen(Vector3? from)
+    /// <summary>开 / 关一次。音效与第一关一致：开门原声，关门音高压低一点。</summary>
+    public void Toggle(Vector3? from)
     {
-        if (open || !leaf) return;
-        open = true;
-        float sign = from.HasValue ? SwingSign(from.Value) : 1f;
-        StartCoroutine(Swing(sign));
+        if (!leaf) return;
+        EnsureBase();
+
+        if (open)                                  // 已经开着 → 关
+        {
+            open = false;
+            target = 0f;
+            GameAudio.PlayDoor(.88f, .80f);
+            Debug.Log($"[第二关] 关门 {Key}");
+            return;
+        }
+
+        open = true;                               // 关着 → 开
+        sign = from.HasValue ? SwingSign(from.Value) : 1f;
+        target = OpenAngle * sign;
+        GameAudio.PlayDoor(1f, .85f);
+        Debug.Log($"[第二关] 开门 {Key}（{(sign > 0 ? "正向" : "反向")}）");
     }
+
+    void Update()
+    {
+        if (!leaf || Mathf.Approximately(angle, target)) return;
+        EnsureBase();
+        angle = Mathf.MoveTowards(angle, target, SwingSpeed * Time.deltaTime);
+        leaf.localRotation = baseRot * Quaternion.Euler(0f, angle, 0f);
+    }
+
+    public void PushOpen() => Toggle(null);
+    public void PushOpen(Vector3? from) => Toggle(from);
 
     /// <summary>读档：门直接保持敞开，不播动画。</summary>
     public void RestoreOpen()
     {
         if (open || !leaf) return;
+        EnsureBase();
         open = true;
-        leaf.localRotation = leaf.localRotation * Quaternion.Euler(0f, 92f, 0f);
+        sign = 1f;
+        angle = target = OpenAngle;
+        leaf.localRotation = baseRot * Quaternion.Euler(0f, angle, 0f);
     }
 
     /// <summary>
@@ -150,20 +192,5 @@ public sealed class Level2Door : L2Interactable
         Vector3 a = leaf.position + (leaf.rotation * Quaternion.Euler(0f, 92f, 0f)) * probe;
         Vector3 c = leaf.position + (leaf.rotation * Quaternion.Euler(0f, -92f, 0f)) * probe;
         return Vector3.Distance(a, player) >= Vector3.Distance(c, player) ? 1f : -1f;
-    }
-
-    IEnumerator Swing(float sign)
-    {
-        Quaternion from = leaf.localRotation;
-        Quaternion to = from * Quaternion.Euler(0f, 92f * sign, 0f);
-        float t = 0f;
-        while (t < 1f)
-        {
-            t += Time.deltaTime * 2.6f;
-            leaf.localRotation = Quaternion.Slerp(from, to, Mathf.SmoothStep(0f, 1f, t));
-            yield return null;
-        }
-        leaf.localRotation = to;
-        Debug.Log($"[第二关] 门已推开 {Key}（{(sign > 0 ? "正向" : "反向")}）");
     }
 }

@@ -76,9 +76,9 @@ public sealed class GameAudio : MonoBehaviour
         page = Make("提示翻页音效", null, .9f, false);
         // 开门 / 开灯：再单独一条，和拾取、翻页都不互相干扰。
         world = Make("环境互动音效", null, 1f, false);
-        // 信纸上的钢笔书写：没有现成采样，运行时合成一小段“笔尖蹭纸”，一个字响一下。
-        penClip = BuildPenScratch();
-        pen = Make("书写音效", null, .9f, false);
+        // 信纸上的打字声：没有现成采样，运行时合成一记清脆的键帽声，一个字响一下。
+        penClip = BuildKeyClick();
+        pen = Make("打字音效", null, .9f, false);
 
         SceneManager.sceneLoaded += OnSceneLoaded;
         EnsureListener();
@@ -175,41 +175,42 @@ public sealed class GameAudio : MonoBehaviour
     }
 
     /// <summary>
-    /// 信纸上的钢笔书写：每写出一个字响一下。
-    /// 没有现成采样，就在运行时合成一小段“笔尖蹭纸”，音高 / 音量都随机一点，
-    /// 一秒近二十个字连着响，也不会听成“哒哒哒”的机械节拍。
+    /// 信纸上的“打字”：每写出一个字响一下清脆的键盘声。
+    /// 没有现成采样，就在运行时合成一小段键帽落下的“嗒”，音高 / 音量随机一点，
+    /// 一秒近二十个字连着响，也不会听成机械的节拍。
     /// </summary>
-    public static void PlayPen()
+    public static void PlayType()
     {
         var a = Instance;
         if (!a || !a.pen || !a.penClip) return;
-        a.pen.pitch = Random.Range(.85f, 1.18f);
-        a.pen.PlayOneShot(a.penClip, Random.Range(.45f, .75f));
+        a.pen.pitch = Random.Range(.92f, 1.12f);
+        a.pen.PlayOneShot(a.penClip, Random.Range(.38f, .62f));
     }
 
     /// <summary>
-    /// 合成“钢笔在纸上写一笔”：白噪声过两级低通（压掉刺耳的嘶声，留下纸纤维的闷响），
-    /// 配一个快起慢收的包络，再叠 63Hz 的颗粒起伏，像笔尖一路蹭过去。
+    /// 合成一记键盘敲击：极短的高频“嗒”（白噪声减低频后的嘶声）+ 两层键帽共鸣（2.4k / 1.1k），
+    /// 衰减都很快，所以听起来是“清脆”而不是“闷”；0.06 秒就干净了，连着敲也不会糊成一片。
     /// </summary>
-    static AudioClip BuildPenScratch()
+    static AudioClip BuildKeyClick()
     {
         const int sr = 44100;
-        int n = Mathf.RoundToInt(sr * .07f);
+        int n = Mathf.RoundToInt(sr * .06f);
         var data = new float[n];
         var rnd = new System.Random(20261125);
-        float lp1 = 0f, lp2 = 0f;
+        float lp = 0f;
         for (int i = 0; i < n; i++)
         {
-            float t = (float)i / (n - 1);
-            // 起手快、收尾慢：笔尖落下那一下实，抬起来时轻
-            float env = Mathf.Pow(Mathf.Sin(Mathf.PI * Mathf.Pow(t, .75f)), .8f) * Mathf.Lerp(1f, .35f, t);
+            float t = (float)i / sr;
+            float tap = Mathf.Exp(-t * 260f);        // 键帽落下的那一下：4ms 内就收干
+            float ring = Mathf.Exp(-t * 62f);        // 塑料键帽的余音
             float white = (float)(rnd.NextDouble() * 2.0 - 1.0);
-            lp1 += (white - lp1) * .55f;
-            lp2 += (lp1 - lp2) * .30f;
-            float grain = .80f + .20f * Mathf.Sin(t * Mathf.PI * 2f * 63f);
-            data[i] = Mathf.Clamp(lp2 * env * grain * 1.6f, -1f, 1f);
+            lp += (white - lp) * .16f;
+            float hiss = white - lp;                 // 减掉低频 = 只剩清脆的高频
+            float tone = Mathf.Sin(2f * Mathf.PI * 2450f * t) * .40f
+                       + Mathf.Sin(2f * Mathf.PI * 1180f * t) * .20f;
+            data[i] = Mathf.Clamp(hiss * tap * .60f + tone * ring * .45f, -1f, 1f);
         }
-        var clip = AudioClip.Create("钢笔书写", n, 1, sr, false);
+        var clip = AudioClip.Create("键盘敲击", n, 1, sr, false);
         clip.SetData(data, 0);
         return clip;
     }

@@ -54,10 +54,10 @@ public sealed class Level2Ui : MonoBehaviour
     // 信纸的书写进度：整封信连续数，遇到换行/句号才停一下
     int letterChars;
     float letterTimer;
-    // 信纸正文字号自适应的缓存（换了信或换了分辨率才重算）
+    // 信纸排版缓存（换了信 / 换了分辨率才重排）
+    LetterLayout letterFit;
     string letterFitBody;
-    float letterFitWidth;
-    int letterFitSize;
+    float letterFitWidth, letterFitHeight;
     bool blockerSet, mouseFreed;
 
     /// <summary>屏幕上看得到的那一页：回看时是历史页，否则是正常推进到的那一页。</summary>
@@ -266,7 +266,7 @@ public sealed class Level2Ui : MonoBehaviour
                 else if (c == '。' || c == '？' || c == '！' || c == '—') letterTimer = LetterDotPause;
                 else if (c == '，' || c == '、' || c == '：' || c == '；') letterTimer = LetterCharDelay * 2f;
                 else letterTimer = LetterCharDelay;
-                if (c != '\n' && c != ' ' && c != '\r') GameAudio.PlayPen();    // 写字的声音
+                if (c != '\n' && c != ' ' && c != '\r') GameAudio.PlayType();    // 打字的声音
             }
         }
 
@@ -566,14 +566,33 @@ public sealed class Level2Ui : MonoBehaviour
         DrawBottomRow(f);
     }
 
+    // ---------------- 信纸排版 ----------------
     // 信纸上的字：钢笔手写体 + 深墨色，比正文更“墨”一点，压在米黄纸上才不飘。
     static readonly Color InkColor = new Color(.13f, .09f, .06f);
+
+    /// <summary>信纸上的一行：写什么、从原文第几个字开始、缩进多少、上面要不要留段间距。</summary>
+    sealed class LetterLine
+    {
+        public string text;
+        public int start;              // 这一行首字在原文里的下标（打字机按它决定写到哪）
+        public bool rightAligned;      // 落款靠右
+        public float indent;           // 段首缩进两格
+        public float gapBefore;        // 与上一段之间的空
+        public float[] cum;            // 逐字累计宽度，画半行时不用再量
+    }
+
+    sealed class LetterLayout
+    {
+        public int size;
+        public float lineH, totalH, width;
+        public readonly List<LetterLine> lines = new List<LetterLine>();
+    }
 
     /// <summary>钢笔手写体样式（信纸专用）。字体没载入时自动退回系统字体，不会画不出字。</summary>
     GUIStyle PenStyle(int size, TextAnchor anchor, Color color)
     {
         var st = new GUIStyle(GUI.skin.label)
-        { font = penFont ? penFont : font, fontSize = size, alignment = anchor, wordWrap = true };
+        { font = penFont ? penFont : font, fontSize = size, alignment = anchor, wordWrap = false };
         st.normal.textColor = color;
         st.hover.textColor = color;
         st.active.textColor = color;
@@ -582,54 +601,158 @@ public sealed class Level2Ui : MonoBehaviour
         return st;
     }
 
+    /// <summary>
+    /// 一个字的宽度。手写体和雅黑的中文 / 全角标点都正好是 1em（量过字形表），
+    /// 半角字符按半个字算 —— 所以排版完全不用去问字体要字形，试字号时也不会把字体图集撑爆。
+    /// </summary>
+    float AdvanceOf(char c, int size) => c < 128 ? size * .5f : size;
+
+    /// <summary>这些标点不落在行首（落在行首会“吊”在左边，像排错了）。</summary>
+    static bool IsClosing(char c) => "。，、！？：；）】」’”·…".IndexOf(c) >= 0;
+
+    /// <summary>
+    /// 把整封信排成行：正文按空行分段，每段首行缩进两格，段与段之间留一点空，
+    /// 落款（以“——”开头的那一段）靠右。行距放到 1.62 倍 —— 手写体自带的行高是 1.0，
+    /// 直接画会挤成一坨（这就是上一版看着“糊在一起”的原因）。
+    /// </summary>
+    LetterLayout ComposeLetter(string body, float maxW, int size)
+    {
+        var L = new LetterLayout { size = size, width = maxW };
+        L.lineH = size * 1.62f;
+        float paraGap = size * .62f;
+        float indent = size * 2f;
+
+        int i = 0, n = body.Length;
+        while (i < n)
+        {
+            int paraStart = i;
+            while (i < n && body[i] != '\n') i++;
+            string para = body.Substring(paraStart, i - paraStart);
+            if (i < n) i++;                                   // 吃掉换行
+            if (para.Length == 0) continue;
+
+            bool right = para.StartsWith("——");
+            float gap = L.lines.Count == 0 ? 0f : paraGap;
+            int p = 0;
+            bool firstLine = true;
+            while (p < para.Length)
+            {
+                float limit = maxW - (firstLine && !right ? indent : 0f);
+                // 先贪心装到装不下为止
+                int take = 0;
+                float wsum = 0f;
+                while (p + take < para.Length)
+                {
+                    float cw = AdvanceOf(para[p + take], size);
+                    // 装不下了就换行；但标点可以吊在行尾，别把它单独挤到下一行开头
+                    if (wsum + cw > limit && take > 0 && !IsClosing(para[p + take])) break;
+                    wsum += cw;
+                    take++;
+                }
+                // 再往回找一个标点：中文虽然哪都能断，但一句话从中间劈开会很难看。
+                // 只要断在标点之后还剩下大半行（55%），就挪到那儿断。
+                if (p + take < para.Length && take > 1 && !IsClosing(para[p + take - 1]))
+                {
+                    for (int k = take - 1; k > 0; k--)
+                    {
+                        if (!IsClosing(para[p + k - 1])) continue;
+                        float toK = 0f;
+                        for (int m = 0; m < k; m++) toK += AdvanceOf(para[p + m], size);
+                        if (toK >= limit * .55f) { take = k; wsum = toK; }
+                        break;
+                    }
+                }
+                if (take == 0) take = 1;
+
+                var sb = new System.Text.StringBuilder(take);
+                var cum = new float[take + 1];
+                for (int m = 0; m < take; m++)
+                {
+                    sb.Append(para[p + m]);
+                    cum[m + 1] = cum[m] + AdvanceOf(para[p + m], size);
+                }
+                p += take;
+                L.lines.Add(new LetterLine
+                {
+                    text = sb.ToString(),
+                    start = paraStart + (p - take),
+                    rightAligned = right,
+                    indent = firstLine && !right ? indent : 0f,
+                    gapBefore = gap,
+                    cum = cum,
+                });
+                gap = 0f;
+                firstLine = false;
+            }
+        }
+        float total = 0f;
+        foreach (var ln in L.lines) total += ln.gapBefore + L.lineH;
+        L.totalH = total;
+        return L;
+    }
+
+    /// <summary>字号从大往小试，取第一个整封装得下的。结果缓存起来，OnGUI 一帧进来好几次也不重排。</summary>
+    LetterLayout LetterLayoutFor(string body, float width, float height, int baseSize)
+    {
+        if (letterFit != null && letterFitBody == body
+            && Mathf.Approximately(letterFitWidth, width) && Mathf.Approximately(letterFitHeight, height))
+            return letterFit;
+
+        LetterLayout best = null;
+        for (int s = baseSize; s >= 12; s--)
+        {
+            best = ComposeLetter(body, width, s);
+            if (best.totalH <= height) break;
+        }
+        letterFit = best;
+        letterFitBody = body;
+        letterFitWidth = width;
+        letterFitHeight = height;
+        // 字号定下来之后一次性把整封信的字形烘进图集，别跟着逐字显示反复重建贴图（会一顿一顿的）。
+        if (penFont && best != null) penFont.RequestCharactersInTexture(body, best.size, FontStyle.Normal);
+        return best;
+    }
+
     void DrawLetter(Page p)
     {
         Fill(new Rect(0, 0, Screen.width, Screen.height), new Color(0f, 0f, 0f, .82f));
 
-        float h = Mathf.Min(Screen.height * .86f, 880f);
+        float h = Mathf.Min(Screen.height * .88f, 900f);
         float w = h * .74f;
         var r = new Rect((Screen.width - w) * .5f, (Screen.height - h) * .5f, w, h);
 
         if (letterPaper) GUI.DrawTexture(r, letterPaper, ScaleMode.ScaleAndCrop, true);
         else Fill(r, new Color(.94f, .90f, .80f, 1f));
 
-        float pad = w * .105f;
+        float pad = w * .115f;
         float bodyW = w - pad * 2f;
 
-        // 抬头：也是钢笔字，比正文大一号
-        int titleSize = Mathf.RoundToInt(h * .048f);
-        GUI.Label(new Rect(r.x + pad, r.y + h * .105f, bodyW, titleSize * 1.6f),
+        // 抬头：也是钢笔字，比正文大一号，居中
+        int titleSize = Mathf.RoundToInt(h * .046f);
+        GUI.Label(new Rect(r.x, r.y + h * .082f, w, titleSize * 1.7f),
             p.title ?? "", PenStyle(titleSize, TextAnchor.MiddleCenter, InkColor));
 
-        // 正文：从抬头下面一直写到页脚上面。字号先按信纸高度取一个基准，
-        // 再用 CalcHeight 真量——装不下就一号一号往下收，保证整封信落在纸上、不写穿底边。
-        float bodyTop = r.y + h * .205f;
-        float bodyH = r.y + h * .815f - bodyTop;
+        float bodyTop = r.y + h * .20f;
+        float bodyH = r.y + h * .80f - bodyTop;
         string full = p.body ?? "";
-        bool instant = reviewing != null;                        // 回看时整封直接给全，不用再等一遍书写
+        var L = LetterLayoutFor(full, bodyW, bodyH, Mathf.RoundToInt(h * .040f));
+
+        bool instant = reviewing != null;                     // 回看时整封直接给全，不用再等一遍打字
         int shown = instant ? full.Length : Mathf.Min(letterChars, full.Length);
 
-        int size;
-        // 字号自适应只在换信 / 换分辨率时算一次：OnGUI 一帧会进来好几次，每次几十遍 CalcHeight 太浪费。
-        if (letterFitBody != full || !Mathf.Approximately(letterFitWidth, bodyW) || letterFitSize <= 0)
+        // 整段字块在正文区里略微偏上（手写信很少顶到纸中间才开始），再一行一行落笔。
+        float y = bodyTop + Mathf.Max(0f, (bodyH - L.totalH) * .30f);
+        var st = PenStyle(L.size, TextAnchor.UpperLeft, InkColor);
+        foreach (var ln in L.lines)
         {
-            size = Mathf.RoundToInt(h * .040f);
-            var probe = PenStyle(size, TextAnchor.UpperCenter, InkColor);
-            while (size > 10 && probe.CalcHeight(new GUIContent(full), bodyW) > bodyH)
-            {
-                size -= 1;
-                probe = PenStyle(size, TextAnchor.UpperCenter, InkColor);
-            }
-            letterFitSize = size;
-            letterFitBody = full;
-            letterFitWidth = bodyW;
-            // 一次性把整封信要用的字形烘进字体图集，别跟着“一个字一个字写”反复重建贴图（会一顿一顿的）。
-            if (penFont) penFont.RequestCharactersInTexture(full, size, FontStyle.Normal);
+            if (ln.start >= shown) break;                     // 还没写到这一行
+            int cnt = Mathf.Min(ln.text.Length, shown - ln.start);
+            float x = ln.rightAligned
+                ? r.x + w - pad - ln.cum[ln.text.Length]      // 落款按“写完之后”的位置定左端，字往右长，不会左右滑
+                : r.x + pad + ln.indent;
+            GUI.Label(new Rect(x, y + ln.gapBefore, L.width, L.lineH), ln.text.Substring(0, cnt), st);
+            y += ln.gapBefore + L.lineH;
         }
-        size = letterFitSize;
-        var st = PenStyle(size, TextAnchor.UpperCenter, InkColor);
-        // 只画“已经写出来的那几个字”：字从上往下长，写完的段落不会重排。
-        GUI.Label(new Rect(r.x + pad, bodyTop, bodyW, bodyH), full.Substring(0, shown), st);
 
         float rowH = Mathf.Clamp(h * .05f, 32f, 40f);
         DrawBottomRowOnPaper(new Rect(r.x + pad, r.y + h * .845f, bodyW, rowH), 1f,
