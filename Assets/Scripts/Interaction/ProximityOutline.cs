@@ -44,8 +44,11 @@ public sealed class ProximityOutline : MonoBehaviour
     void OnEnable()
     {
         renderers=GetComponentsInChildren<Renderer>(true);
-        var shader=Shader.Find("Childhood/ProximityOutline");
-        if(!shader){Debug.LogWarning("Proximity outline shader is missing",this);return;}
+        // 打包后 Shader.Find 找不到：这个 shader 没有任何材质引用它，会被 Unity 从包里裁掉。
+        // 所以它放在 Resources/Shaders 下（Resources 里的资源一定会打进包），先走 Resources 再退回 Find。
+        var shader=Resources.Load<Shader>("Shaders/ProximityOutline");
+        if(!shader)shader=Shader.Find("Childhood/ProximityOutline");
+        if(!shader){Debug.LogWarning("[描边] 找不到 Childhood/ProximityOutline，打包版请确认 Resources/Shaders/ProximityOutline 在包内",this);return;}
         outline=new Material(shader){hideFlags=HideFlags.DontSave};
         outline.SetFloat("_OutlineWidth",outlineWidth);
         outline.SetColor("_OutlineColor",outlineColor);

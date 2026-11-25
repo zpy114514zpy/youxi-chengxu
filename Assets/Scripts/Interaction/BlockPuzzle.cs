@@ -123,6 +123,7 @@ public sealed class BlockPuzzle : MonoBehaviour
     void BuildPads()
     {
         var material = GlowMaterial(new Color(.40f, .92f, 1f, .55f));
+        if (!material) return;                     // 拿不到 shader 就别硬建，宁可没有光点也不要抛异常
         var dot = SoftDot();
         if (dot)
         {
@@ -148,8 +149,8 @@ public sealed class BlockPuzzle : MonoBehaviour
     /// <summary>木色底座材质（运行时生成，不改工程资源）。房间偏暗，木色压一点自发光，免得看成一块黑板。</summary>
     static Material WoodMaterial()
     {
-        var shader = Shader.Find("Universal Render Pipeline/Lit");
-        if (!shader) shader = Shader.Find("Standard");
+        var shader = RuntimeShaders.Lit;
+        if (!shader) return null;
         var material = new Material(shader) { name = "积木堆木色" };
         var wood = new Color(.82f, .60f, .36f, 1f);
         if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", wood);
@@ -526,8 +527,8 @@ public sealed class BlockPuzzle : MonoBehaviour
     /// <summary>加法混合的自发光材质，用来画“这里要放一块积木”的光点。</summary>
     static Material GlowMaterial(Color color)
     {
-        var shader = Shader.Find("Universal Render Pipeline/Unlit");
-        if (!shader) shader = Shader.Find("Unlit/Color");
+        var shader = RuntimeShaders.Unlit;
+        if (!shader) return null;
         var material = new Material(shader);
         material.SetFloat("_Surface", 1f);
         material.SetFloat("_Blend", 0f);

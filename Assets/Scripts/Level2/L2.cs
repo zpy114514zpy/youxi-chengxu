@@ -128,9 +128,9 @@ public static class L2
 
     public static Material Unlit(Color color, bool transparent = false)
     {
-        var shader = Shader.Find("Universal Render Pipeline/Unlit");
-        if (!shader) shader = Shader.Find("Unlit/Color");
-        if (!shader) shader = Shader.Find("Sprites/Default");
+        // 打包后 Shader.Find 可能拿到 null（shader 没人引用会被裁），统一走 RuntimeShaders 并留退路。
+        var shader = RuntimeShaders.Unlit;
+        if (!shader) return null;
         var m = new Material(shader) { hideFlags = HideFlags.DontSave };
         if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", color);
         if (m.HasProperty("_Color")) m.SetColor("_Color", color);

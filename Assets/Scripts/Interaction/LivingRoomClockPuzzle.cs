@@ -341,12 +341,14 @@ public sealed class LivingRoomClockPuzzle : MonoBehaviour
 
         if (!padMat)
         {
-            var sh = Shader.Find("Universal Render Pipeline/Unlit");
-            if (!sh) sh = Shader.Find("Unlit/Color");
-            padMat = new Material(sh);
+            var sh = RuntimeShaders.Unlit;
+            if (sh) padMat = new Material(sh);
             var yellow = new Color(1f, .80f, .30f, 1f);
-            if (padMat.HasProperty("_BaseColor")) padMat.SetColor("_BaseColor", yellow);
-            padMat.color = yellow;
+            if (padMat)
+            {
+                if (padMat.HasProperty("_BaseColor")) padMat.SetColor("_BaseColor", yellow);
+                padMat.color = yellow;
+            }
         }
         var r = go.GetComponent<Renderer>();
         if (r) r.sharedMaterial = padMat;
@@ -381,7 +383,8 @@ public sealed class LivingRoomClockPuzzle : MonoBehaviour
             var r = t.GetComponent<Renderer>();
             if (r && r.sharedMaterial) { paperMat = r.sharedMaterial; return paperMat; }
         }
-        var shader = Shader.Find("Universal Render Pipeline/Lit");
+        var shader = RuntimeShaders.Lit;
+        if (!shader) return null;
         paperMat = new Material(shader) { color = new Color(.92f, .9f, .86f) };
         return paperMat;
     }

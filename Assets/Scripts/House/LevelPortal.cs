@@ -145,7 +145,7 @@ public sealed class LevelPortal : MonoBehaviour
         var discR = discGo.AddComponent<MeshRenderer>();
         discR.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         discR.receiveShadows = false;
-        discMat = new Material(discShader ? discShader : Shader.Find("Unlit/Color"));
+        discMat = new Material(discShader ? discShader : RuntimeShaders.Unlit);
         discMat.SetFloat("_Intensity", 1f);
         discMat.SetFloat("_Speed", .5f);
         discR.sharedMaterial = discMat;
@@ -155,7 +155,7 @@ public sealed class LevelPortal : MonoBehaviour
         ring = new GameObject("光环").transform;
         ring.SetParent(transform, false);
         ring.localPosition = new Vector3(0f, RingCenterY, 0f);
-        ringMat = new Material(ringShader ? ringShader : Shader.Find("Unlit/Color"));
+        ringMat = new Material(ringShader ? ringShader : RuntimeShaders.Unlit);
         ringMat.SetFloat("_Speed", 2.2f);
         ringMat.SetFloat("_Intensity", 1f);
         AddTorus(ring, MajorRadius, Tube, ringMat, "光环本体");
@@ -166,7 +166,7 @@ public sealed class LevelPortal : MonoBehaviour
         // 绕着环慢慢转的小光点
         shards = new GameObject("环上流光").transform;
         shards.SetParent(ring, false);
-        var shardMat = new Material(sparkShader ? sparkShader : Shader.Find("Unlit/Color"));
+        var shardMat = new Material(sparkShader ? sparkShader : RuntimeShaders.Unlit);
         shardMat.SetColor("_Color", new Color(1f, .88f, .62f, 1f));
         for (int i = 0; i < 10; i++)
         {
@@ -229,7 +229,7 @@ public sealed class LevelPortal : MonoBehaviour
         var psr = psGo.GetComponent<ParticleSystemRenderer>();
         psr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         psr.receiveShadows = false;
-        sparkMat = new Material(sparkShader ? sparkShader : Shader.Find("Unlit/Color"));
+        sparkMat = new Material(sparkShader ? sparkShader : RuntimeShaders.Unlit);
         sparkMat.SetColor("_Color", new Color(1f, .86f, .58f, 1f));
         psr.sharedMaterial = sparkMat;
 
@@ -255,7 +255,7 @@ public sealed class LevelPortal : MonoBehaviour
         var floorR = floorGo.GetComponent<MeshRenderer>();
         floorR.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         floorR.receiveShadows = false;
-        floorMat = new Material(sparkShader ? sparkShader : Shader.Find("Unlit/Color"));
+        floorMat = new Material(sparkShader ? sparkShader : RuntimeShaders.Unlit);
         floorMat.SetColor("_Color", new Color(1f, .80f, .44f, .60f));
         floorMat.SetFloat("_Boost", .85f);
         floorR.sharedMaterial = floorMat;
